@@ -25,10 +25,10 @@ import {
 const { width } = Dimensions.get('window');
 
 const categories = [
-  { id: 'all', title: 'All', icon: <Globe color="#005A9C" size={20} /> },
-  { id: 'legal', title: 'Legal', icon: <Scale color="#005A9C" size={20} /> },
-  { id: 'education', title: 'Education', icon: <Book color="#005A9C" size={20} /> },
-  { id: 'services', title: 'Services', icon: <Building color="#005A9C" size={20} /> },
+  { id: 'all', title: 'All', icon: <Globe color="#1C4587" size={20} /> },
+  { id: 'legal', title: 'Legal', icon: <Scale color="#1C4587" size={20} /> },
+  { id: 'education', title: 'Education', icon: <Book color="#1C4587" size={20} /> },
+  { id: 'services', title: 'Services', icon: <Building color="#1C4587" size={20} /> },
 ];
 
 const resources = [
@@ -38,7 +38,7 @@ const resources = [
     icon: <Book color="#FFFFFF" size={24}/>, 
     description: 'Comprehensive legal terminology and definitions',
     category: 'education',
-    color: '#667EEA',
+    color: '#1C4587', // Navy Blue - Traditional legal color
     rating: 4.8,
     users: '1.2K'
   },
@@ -48,7 +48,7 @@ const resources = [
     icon: <Gavel color="#FFFFFF" size={24}/>, 
     description: 'Connect with verified legal professionals',
     category: 'services',
-    color: '#764BA2',
+    color: '#8B4513', // Saddle Brown - Professional & authoritative
     rating: 4.9,
     users: '856'
   },
@@ -58,7 +58,7 @@ const resources = [
     icon: <Scale color="#FFFFFF" size={24}/>, 
     description: 'Essential guides on legal rights and procedures',
     category: 'education',
-    color: '#F093FB',
+    color: '#0F4C5C', 
     rating: 4.7,
     users: '2.1K'
   },
@@ -68,7 +68,7 @@ const resources = [
     icon: <Building color="#FFFFFF" size={24}/>, 
     description: 'Free legal assistance and consultation centers',
     category: 'services',
-    color: '#4FACFE',
+    color: '#2C5F2D', 
     rating: 4.6,
     users: '743'
   },
@@ -78,7 +78,7 @@ const resources = [
     icon: <FileText color="#FFFFFF" size={24}/>, 
     description: 'Templates and forms for common legal procedures',
     category: 'legal',
-    color: '#43E97B',
+    color: '#6B2D5C', 
     rating: 4.5,
     users: '967'
   },
@@ -88,7 +88,7 @@ const resources = [
     icon: <Video color="#FFFFFF" size={24}/>, 
     description: 'Step-by-step legal process explanations',
     category: 'education',
-    color: '#FA709A',
+    color: '#8B0000',
     rating: 4.8,
     users: '1.5K'
   }
@@ -192,7 +192,7 @@ const ResourcesScreen = () => {
         {/* Featured Resource */}
         <View style={styles.featuredCard}>
           <View style={styles.featuredHeader}>
-            <MessageCircle color="#005A9C" size={24} />
+            <MessageCircle color="#1C4587" size={24} />
             <Text style={styles.featuredTitle}>AI Legal Assistant</Text>
           </View>
           <Text style={styles.featuredDescription}>
@@ -222,7 +222,7 @@ const ResourcesScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { 
     flex: 1, 
-    backgroundColor: '#F8FAFC' 
+    backgroundColor: '#F5F5F0' 
   },
   container: { 
     flex: 1,
@@ -234,12 +234,12 @@ const styles = StyleSheet.create({
   header: { 
     fontSize: 28, 
     fontWeight: 'bold', 
-    color: '#1E293B',
+    color: '#1C2833', 
     marginBottom: 4
   },
   subHeader: { 
     fontSize: 16, 
-    color: '#64748B'
+    color: '#5D6D7E' 
   },
   statsContainer: {
     flexDirection: 'row',
@@ -256,17 +256,19 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#D5DBDB' // Subtle border
   },
   statNumber: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#005A9C',
+    color: '#1C4587', // Navy blue
     marginBottom: 4
   },
   statLabel: {
     fontSize: 12,
-    color: '#64748B'
+    color: '#5D6D7E'
   },
   categoriesContainer: {
     marginBottom: 24
@@ -283,28 +285,28 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0'
+    borderColor: '#D5DBDB'
   },
   categoryButtonActive: {
-    backgroundColor: '#005A9C',
-    borderColor: '#005A9C'
+    backgroundColor: '#1C4587',
+    borderColor: '#1C4587'
   },
   categoryText: {
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '500',
-    color: '#64748B'
+    color: '#5D6D7E'
   },
   categoryTextActive: {
     color: '#FFFFFF'
   },
   featuredCard: {
-    backgroundColor: '#EBF4FF',
+    backgroundColor: '#E8EAF6',
     borderRadius: 20,
     padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#DBEAFE'
+    borderColor: '#C5CAE9'
   },
   featuredHeader: {
     flexDirection: 'row',
@@ -314,17 +316,17 @@ const styles = StyleSheet.create({
   featuredTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#005A9C',
+    color: '#1C4587', // Navy blue
     marginLeft: 12
   },
   featuredDescription: {
     fontSize: 14,
-    color: '#374151',
+    color: '#2C3E50', // Dark gray-blue
     marginBottom: 16,
     lineHeight: 20
   },
   featuredButton: {
-    backgroundColor: '#005A9C',
+    backgroundColor: '#1C4587', // Navy blue
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
@@ -338,7 +340,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#1C2833', // Dark charcoal
     marginBottom: 16
   },
   resourcesGrid: {
@@ -352,7 +354,12 @@ const styles = StyleSheet.create({
     width: (width - 52) / 2,
     borderRadius: 20,
     padding: 20,
-    height: 200
+    height: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5
   },
   resourceHeader: {
     flexDirection: 'row',
@@ -364,14 +371,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center'
   },
   resourceRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12
@@ -394,7 +401,7 @@ const styles = StyleSheet.create({
   },
   resourceDescription: { 
     fontSize: 12, 
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.95)',
     lineHeight: 16,
     flex: 1
   },
@@ -408,12 +415,12 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   usersText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
     marginLeft: 4
   },
   accessButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8
