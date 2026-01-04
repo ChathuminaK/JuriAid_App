@@ -9,6 +9,7 @@ import CasesScreen from '../screens/CasesScreen';
 import ResourcesScreen from '../screens/ResourcesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import AIChatScreen from '../screens/AIChatScreen'; // Import the separate screen
+import CasesStackNavigator from './CasesStackNavigator';
 
 const Tab = createBottomTabNavigator();
 
@@ -210,7 +211,7 @@ const BottomTabNavigator = () => {
       />
       <Tab.Screen
         name="Cases"
-        component={CasesScreen}
+        component={CasesStackNavigator}
         options={{
           tabBarLabel: 'Cases',
         }}
