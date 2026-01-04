@@ -40,7 +40,8 @@ const App = () => {
   return (
     <NavigationContainer>
       <StatusBar barStyle="dark-content" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <BottomTabNavigator />
+      {/* <Stack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
           <Stack.Screen name="Main" component={BottomTabNavigator} />
         ) : (
@@ -49,7 +50,7 @@ const App = () => {
             <Stack.Screen name="Signup" component={SignupScreen} />
           </>
         )}
-      </Stack.Navigator>
+      </Stack.Navigator> */}
     </NavigationContainer>
   );
 };
