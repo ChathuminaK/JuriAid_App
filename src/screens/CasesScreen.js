@@ -44,7 +44,7 @@ const mockCases = [
   }
 ];
 
-const CasesScreen = () => {
+const CasesScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
 
@@ -129,7 +129,9 @@ const CasesScreen = () => {
             <Text style={styles.header}>Your Case Files</Text>
             <Text style={styles.subHeader}>Manage and track your legal matters</Text>
           </View>
-          <TouchableOpacity style={styles.addButton}>
+          <TouchableOpacity style={styles.addButton}
+            onPress={() => navigation.navigate('NewCase')}>
+          
             <PlusCircle color="#FFFFFF" size={20} />
             <Text style={styles.addButtonText}>New Case</Text>
           </TouchableOpacity>
