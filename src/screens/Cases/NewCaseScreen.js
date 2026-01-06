@@ -1,106 +1,109 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
+  StyleSheet, Text, View, SafeAreaView, TouchableOpacity,
+  ScrollView, Alert, ActivityIndicator, Platform
 } from 'react-native';
-import { ArrowLeft, Save } from 'lucide-react-native';
+import { ArrowLeft, Upload, FileText } from 'lucide-react-native';
+import * as DocumentPicker from '@react-native-documents/picker';
 
 const NewCaseScreen = ({ navigation }) => {
-  const [caseTitle, setCaseTitle] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [priority, setPriority] = useState('Medium');
-  const [description, setDescription] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
-  const handleSave = () => {
-    // Add your save logic here
-    console.log('Saving case:', { caseTitle, clientName, priority, description });
-    navigation.goBack();
+  const handleSelectFile = async () => {
+    try {
+      const [result] = await DocumentPicker.pick({ 
+        type: [DocumentPicker.types.pdf] 
+      });
+      setSelectedFile(result);
+      // Automatically trigger upload after selection
+      await uploadAndSearch(result);
+    } catch (err) {
+      if (!DocumentPicker.isCancel(err)) {
+        Alert.alert('Error', 'Failed to select file');
+      }
+    }
+  };
+
+  const uploadAndSearch = async (file) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      const fileUri = Platform.OS === 'android' ? file.uri : file.uri.replace('file://', '');
+
+      formData.append('file', {
+        uri: fileUri,
+        type: file.type || 'application/pdf',
+        name: file.name || 'document.pdf',
+      });
+
+      // Use 10.0.2.2 for Android Emulator to hit your local Python backend
+      const response = await fetch('http://10.0.2.2:8000/upload_and_search?topk=5', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (response.status === 422) {
+        const errorData = await response.json();
+        Alert.alert('Invalid Document', errorData.detail); 
+        return;
+      }
+
+      if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+
+      const data = await response.json();
+
+      // CLEANING DATA: Prevents the "Navigate Payload" crash
+      const cleanedResults = (data.results || []).map(item => ({
+        case_id: String(item.case_id),
+        final_score: typeof item.final_score === 'number' ? item.final_score.toFixed(3) : "0.000",
+        role: String(item.role),
+        snippet: item.snippet ? item.snippet.substring(0, 300).replace(/\s+/g, ' ') + "..." : "No snippet"
+      }));
+
+      navigation.navigate('SimilarCases', {
+        results: cleanedResults,
+        fileName: file.name,
+      });
+
+    } catch (error) {
+      console.error('Upload Error:', error);
+      Alert.alert('Connection Error', 'Backend is unreachable. Check if FastAPI is running.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <ArrowLeft color="#005A9C" size={24} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Case</Text>
-          <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-            <Save color="#FFFFFF" size={20} />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Upload Case</Text>
+          <View style={{ width: 40 }} />
         </View>
 
-        {/* Form */}
-        <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Case Title *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter case title"
-              value={caseTitle}
-              onChangeText={setCaseTitle}
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Client Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter client name"
-              value={clientName}
-              onChangeText={setClientName}
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Priority</Text>
-            <View style={styles.priorityContainer}>
-              {['Low', 'Medium', 'High'].map((level) => (
-                <TouchableOpacity
-                  key={level}
-                  style={[
-                    styles.priorityButton,
-                    priority === level && styles.priorityButtonActive,
-                  ]}
-                  onPress={() => setPriority(level)}
-                >
-                  <Text
-                    style={[
-                      styles.priorityText,
-                      priority === level && styles.priorityTextActive,
-                    ]}
-                  >
-                    {level}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+        <ScrollView contentContainerStyle={styles.uploadContainer}>
+          <View style={styles.iconContainer}><Upload color="#005A9C" size={48} /></View>
+          <Text style={styles.title}>Legal Analysis</Text>
+          <Text style={styles.sub}>Upload a PDF to find matching precedents</Text>
+          
+          {selectedFile && (
+            <View style={styles.selectedFileCard}>
+              <FileText color="#005A9C" size={24} />
+              <View style={styles.fileInfo}>
+                <Text style={styles.fileName}>{selectedFile.name}</Text>
+              </View>
             </View>
-          </View>
+          )}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Enter case description"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-              placeholderTextColor="#9CA3AF"
-            />
-          </View>
-
-          <TouchableOpacity style={styles.createButton} onPress={handleSave}>
-            <Text style={styles.createButtonText}>Create Case</Text>
+          <TouchableOpacity style={styles.uploadButton} onPress={handleSelectFile} disabled={uploading}>
+            {uploading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.uploadButtonText}>Select PDF & Search</Text>}
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -109,100 +112,20 @@ const NewCaseScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
-  saveButton: {
-    backgroundColor: '#005A9C',
-    padding: 8,
-    borderRadius: 8,
-  },
-  form: {
-    flex: 1,
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  textArea: {
-    minHeight: 120,
-    paddingTop: 16,
-  },
-  priorityContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  priorityButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-  },
-  priorityButtonActive: {
-    backgroundColor: '#005A9C',
-    borderColor: '#005A9C',
-  },
-  priorityText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  priorityTextActive: {
-    color: '#FFFFFF',
-  },
-  createButton: {
-    backgroundColor: '#005A9C',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  safeArea: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#FFF', borderBottomWidth: 1 },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold' },
+  uploadContainer: { padding: 20, alignItems: 'center' },
+  iconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', marginVertical: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#1E293B' },
+  sub: { fontSize: 14, color: '#64748B', marginBottom: 20 },
+  selectedFileCard: { flexDirection: 'row', padding: 15, backgroundColor: '#FFF', borderRadius: 10, width: '100%', marginBottom: 20, borderWidth: 1, borderColor: '#DDD' },
+  fileInfo: { marginLeft: 10 },
+  fileName: { fontWeight: 'bold' },
+  uploadButton: { backgroundColor: '#005A9C', width: '100%', padding: 15, borderRadius: 10, alignItems: 'center' },
+  uploadButtonText: { color: '#FFF', fontWeight: 'bold' },
 });
 
 export default NewCaseScreen;
