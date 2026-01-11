@@ -10,6 +10,8 @@ import {
   Animated,
   Image
 } from 'react-native';
+import { useSelector } from 'react-redux';
+import { selectUser } from '../../redux/selector/authSelector';
 import { 
   FilePlus, 
   MessageSquare, 
@@ -28,12 +30,14 @@ import {
   BarChart3,
   FileText,
   Scale,
-  Briefcase
+  Briefcase,
+  Heart
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
+  const user = useSelector(selectUser);
   const [greeting, setGreeting] = useState('Good Morning');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -60,19 +64,40 @@ const HomeScreen = ({ navigation }) => {
     ]).start();
   }, []);
 
+  // Get user's first name or full name
+  const getUserName = () => {
+    if (user?.full_name) {
+      const firstName = user.full_name.split(' ')[0];
+      return firstName;
+    }
+    return 'User';
+  };
+
+  // Get user initials for profile image
+  const getUserInitials = () => {
+    if (user?.full_name) {
+      const names = user.full_name.split(' ');
+      if (names.length >= 2) {
+        return names[0][0] + names[1][0];
+      }
+      return names[0][0];
+    }
+    return 'U';
+  };
+
   const quickStats = [
     { 
-      label: 'Active Cases', 
+      label: 'Divorce Cases', 
       value: '8', 
-      icon: <Briefcase color="#FFFFFF" size={20} />, 
+      icon: <Heart color="#FFFFFF" size={20} />, 
       color: '#667EEA',
       trend: '+2',
       trendColor: '#10B981'
     },
     { 
-      label: 'Consultations', 
+      label: 'Client Meetings', 
       value: '12', 
-      icon: <MessageSquare color="#FFFFFF" size={20} />, 
+      icon: <Users color="#FFFFFF" size={20} />, 
       color: '#764BA2',
       trend: '+5',
       trendColor: '#10B981'
@@ -86,7 +111,7 @@ const HomeScreen = ({ navigation }) => {
       trendColor: '#10B981'
     },
     { 
-      label: 'Documents', 
+      label: 'Reports Generated', 
       value: '47', 
       icon: <FileText color="#FFFFFF" size={20} />, 
       color: '#43E97B',
@@ -98,27 +123,27 @@ const HomeScreen = ({ navigation }) => {
   const recentCases = [
     {
       id: '1',
-      title: 'Property Dispute #1023',
-      client: 'John Smith',
+      title: 'Divorce Case - Cruelty & Abandonment',
+      client: 'Mrs. Nadeeka Perera',
       status: 'urgent',
       progress: 75,
-      nextAction: 'Court hearing tomorrow'
+      nextAction: 'File petition in District Court'
     },
     {
       id: '2',
-      title: 'Contract Review',
-      client: 'Tech Corp Inc.',
+      title: 'Divorce Case - Adultery',
+      client: 'Mr. Rohan Silva',
       status: 'progress',
       progress: 45,
-      nextAction: 'Client review pending'
+      nextAction: 'Evidence gathering in progress'
     },
     {
       id: '3',
-      title: 'Employment Case',
-      client: 'Mary Johnson',
+      title: 'Divorce Case - Separation',
+      client: 'Mrs. Amali Fernando',
       status: 'completed',
       progress: 100,
-      nextAction: 'Case closed successfully'
+      nextAction: 'Decree nisi granted'
     }
   ];
 
@@ -131,22 +156,22 @@ const HomeScreen = ({ navigation }) => {
       action: () => navigation?.navigate('Cases')
     },
     {
-      title: 'AI Assistant',
-      subtitle: 'Get instant legal guidance',
-      icon: <MessageSquare color="#FFFFFF" size={28} />,
+      title: 'Case Report',
+      subtitle: 'View divorce case analysis',
+      icon: <FileText color="#FFFFFF" size={28} />,
       backgroundColor: '#667EEA',
-      action: () => navigation?.navigate('AI Chat')
+      action: () => navigation?.navigate('Report')
     },
     {
-      title: 'Find Lawyer',
-      subtitle: 'Connect with professionals',
+      title: 'Law Search',
+      subtitle: 'Find Sri Lankan laws',
       icon: <Search color="#005A9C" size={28} />,
       backgroundColor: '#F1F5F9',
       textColor: '#005A9C',
       action: () => navigation?.navigate('Resources')
     },
     {
-      title: 'Legal Resources',
+      title: 'Law Database',
       subtitle: 'Access law library',
       icon: <BookOpen color="#005A9C" size={28} />,
       backgroundColor: '#EBF4FF',
@@ -200,13 +225,12 @@ const HomeScreen = ({ navigation }) => {
         >
           <View style={styles.headerContent}>
             <View style={styles.profileSection}>
-              <Image
-                source={{ uri: 'https://placehold.co/60x60/EBF4FF/005A9C?text=JD' }}
-                style={styles.profileImage}
-              />
+              <View style={styles.profileImageContainer}>
+                <Text style={styles.profileInitials}>{getUserInitials()}</Text>
+              </View>
               <View style={styles.greetingContainer}>
                 <Text style={styles.greeting}>{greeting}</Text>
-                <Text style={styles.header}>Welcome back, John!</Text>
+                <Text style={styles.header}>Welcome back, {getUserName()}!</Text>
                 <Text style={styles.subHeader}>Ready to manage your legal practice?</Text>
               </View>
             </View>
@@ -270,25 +294,27 @@ const HomeScreen = ({ navigation }) => {
                 ]}>
                   {action.icon}
                 </View>
-                <Text style={[
-                  styles.actionButtonTitle,
-                  action.textColor && { color: action.textColor }
-                ]}>
-                  {action.title}
-                </Text>
-                <Text style={[
-                  styles.actionButtonSubtitle,
-                  action.textColor && { color: '#64748B' }
-                ]}>
-                  {action.subtitle}
-                </Text>
+                <View style={styles.actionTextContainer}>
+                  <Text style={[
+                    styles.actionButtonTitle,
+                    action.textColor && { color: action.textColor }
+                  ]}>
+                    {action.title}
+                  </Text>
+                  <Text style={[
+                    styles.actionButtonSubtitle,
+                    action.textColor && { color: '#64748B' }
+                  ]}>
+                    {action.subtitle}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
         {/* Enhanced AI Assistant Card */}
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={styles.aiAssistantCard}
           onPress={() => navigation?.navigate('AI Chat')}
           activeOpacity={0.9}
@@ -306,6 +332,32 @@ const HomeScreen = ({ navigation }) => {
                 </Text>
                 <View style={styles.aiStats}>
                   <Text style={styles.aiStatsText}>Available 24/7 • 2 unread messages</Text>
+                </View>
+              </View>
+              <ChevronRight color="rgba(255,255,255,0.8)" size={24} />
+            </View>
+          </View>
+        </TouchableOpacity> */}
+
+        {/* Enhanced Case Reports Card */}
+        <TouchableOpacity 
+          style={styles.aiAssistantCard}
+          onPress={() => navigation?.navigate('Report')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.aiBackground}>
+            <View style={styles.aiContent}>
+              <View style={styles.aiIconContainer}>
+                <FileText color="#FFFFFF" size={32} />
+                <View style={styles.aiPulse} />
+              </View>
+              <View style={styles.aiTextContainer}>
+                <Text style={styles.aiTitle}>Divorce Case Reports</Text>
+                <Text style={styles.aiSubtitle}>
+                  Access comprehensive Sri Lankan divorce case analysis
+                </Text>
+                <View style={styles.aiStats}>
+                  <Text style={styles.aiStatsText}>2 Active Reports • Updated Today</Text>
                 </View>
               </View>
               <ChevronRight color="rgba(255,255,255,0.8)" size={24} />
@@ -445,13 +497,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1
   },
-  profileImage: {
+  profileImageContainer: {
     width: 60,
     height: 60,
     borderRadius: 30,
     marginRight: 16,
     borderWidth: 3,
-    borderColor: '#EBF4FF'
+    borderColor: '#EBF4FF',
+    backgroundColor: '#005A9C',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  profileInitials: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF'
   },
   greetingContainer: {
     flex: 1
@@ -592,40 +652,44 @@ const styles = StyleSheet.create({
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12
+    justifyContent: 'space-between'
   },
   actionButton: {
-    width: (width - 76) / 2,
-    padding: 20,
-    borderRadius: 20,
-    alignItems: 'center',
+    width: '48%',
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'flex-start',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3
+    elevation: 3,
+    minHeight: 140,
+    marginBottom: 12
   },
   actionIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12
   },
+  actionTextContainer: {
+    flex: 1,
+    justifyContent: 'flex-end'
+  },
   actionButtonTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
-    textAlign: 'center'
+    marginBottom: 4
   },
   actionButtonSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    lineHeight: 16
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 14
   },
   aiAssistantCard: {
     marginBottom: 20,

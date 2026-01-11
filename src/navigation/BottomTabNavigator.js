@@ -1,14 +1,16 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
-import { Home, Briefcase, BookOpen, User, MessageCircle } from 'lucide-react-native';
+import { Home, Briefcase, BookOpen, User, FileText } from 'lucide-react-native';
 
 // Import screens
-import HomeScreen from '../screens/HomeScreen';
-import CasesScreen from '../screens/CasesScreen';
-import ResourcesScreen from '../screens/ResourcesScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import AIChatScreen from '../screens/AIChatScreen'; // Import the separate screen
+import HomeScreen from '../screens/dashboard/HomeScreen';
+import ReportScreen from '../screens/ReportScreen';
+
+// Import stack navigators
+import CasesStackNavigator from './CasesStackNavigator';
+import ProfileStackNavigator from './ProfileStackNavigator';
+import LawsStackNavigator from './LawsStackNavigator';
 
 const Tab = createBottomTabNavigator();
 
@@ -146,8 +148,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 return <Briefcase color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
               case 'Resources':
                 return <BookOpen color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
-              case 'AI Chat':
-                return <MessageCircle color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
+              case 'Report':
+                return <FileText color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
               case 'Profile':
                 return <User color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
               default:
@@ -181,13 +183,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
           );
         })}
       </View>
-
-      {/* Notification badge for AI Chat */}
-      <View style={styles.badgeContainer}>
-        <View style={styles.notificationBadge}>
-          <Text style={styles.badgeText}>2</Text>
-        </View>
-      </View>
     </View>
   );
 };
@@ -210,32 +205,33 @@ const BottomTabNavigator = () => {
       />
       <Tab.Screen
         name="Cases"
-        component={CasesScreen}
+        component={CasesStackNavigator}
         options={{
           tabBarLabel: 'Cases',
         }}
       />
       <Tab.Screen
-        name="AI Chat"
-        component={AIChatScreen}
-        options={{
-          tabBarLabel: 'AI Chat',
-        }}
-      />
-      <Tab.Screen
         name="Resources"
-        component={ResourcesScreen}
+        component={LawsStackNavigator}
         options={{
           tabBarLabel: 'Resources',
         }}
       />
       <Tab.Screen
+        name="Report"
+        component={ReportScreen}
+        options={{
+          tabBarLabel: 'Report',
+        }}
+      />
+      <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileStackNavigator}
         options={{
           tabBarLabel: 'Profile',
         }}
       />
+      
     </Tab.Navigator>
   );
 };
@@ -296,7 +292,7 @@ const styles = {
   badgeContainer: {
     position: 'absolute',
     top: 8,
-    right: '38%', // Position over AI Chat tab
+    right: '38%',
   },
   notificationBadge: {
     backgroundColor: COLORS.accent,
