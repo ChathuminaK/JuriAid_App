@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,14 +13,33 @@ import {
   Alert,
 } from 'react-native';
 import { Mail, Lock, Eye, EyeOff, Briefcase } from 'lucide-react-native';
-import { authService } from '../../api/auth';
+import { useDispatch, useSelector } from 'react-redux';
+import { login, clearError } from '../../redux/slices/authSlice';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const dispatch = useDispatch();
+  const { loading, error, isAuthenticated } = useSelector((state) => state.auth);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.replace('Main');
+    }
+  }, [isAuthenticated, navigation]);
+
+  useEffect(() => {
+    if (error) {
+      Alert.alert(
+        'Login Failed',
+        typeof error === 'string' ? error : 'Please check your credentials and try again.'
+      );
+      dispatch(clearError());
+    }
+  }, [error, dispatch]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -33,8 +52,8 @@ const LoginScreen = ({ navigation }) => {
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     setErrors(newErrors);
@@ -46,24 +65,7 @@ const LoginScreen = ({ navigation }) => {
       return;
     }
 
-    setLoading(true);
-    try {
-      const response = await authService.login(email, password);
-      
-      // Get user profile
-      await authService.getProfile();
-      
-      Alert.alert('Success', 'Login successful!', [
-        {
-          text: 'OK',
-          onPress: () => navigation.replace('Main'),
-        },
-      ]);
-    } catch (error) {
-      Alert.alert('Login Failed', typeof error === 'string' ? error : 'Please check your credentials and try again.');
-    } finally {
-      setLoading(false);
-    }
+    dispatch(login({ email, password }));
   };
 
   return (
@@ -75,6 +77,7 @@ const LoginScreen = ({ navigation }) => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Logo and Header */}
           <View style={styles.header}>
@@ -104,6 +107,7 @@ const LoginScreen = ({ navigation }) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!loading}
                 />
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
@@ -125,10 +129,12 @@ const LoginScreen = ({ navigation }) => {
                   }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeIcon}
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeOff color="#64748B" size={20} />
@@ -141,7 +147,7 @@ const LoginScreen = ({ navigation }) => {
             </View>
 
             {/* Forgot Password */}
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity style={styles.forgotPassword} disabled={loading}>
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
@@ -161,7 +167,10 @@ const LoginScreen = ({ navigation }) => {
             {/* Sign Up Link */}
             <View style={styles.signupContainer}>
               <Text style={styles.signupText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Signup')}
+                disabled={loading}
+              >
                 <Text style={styles.signupLink}>Sign Up</Text>
               </TouchableOpacity>
             </View>

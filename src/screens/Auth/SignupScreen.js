@@ -12,12 +12,13 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Mail, Lock, Eye, EyeOff, User, Briefcase } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff, User, Briefcase, Phone } from 'lucide-react-native';
 import { authService } from '../../api/auth';
 
 const SignupScreen = ({ navigation }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,8 +43,8 @@ const SignupScreen = ({ navigation }) => {
 
     if (!password) {
       newErrors.password = 'Password is required';
-    } else if (password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     if (!confirmPassword) {
@@ -63,7 +64,14 @@ const SignupScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      await authService.signup(email, password, fullName);
+      const response = await authService.signup(
+        email, 
+        password, 
+        fullName, 
+        phone.trim() || null
+      );
+      
+      console.log('Signup successful:', response);
       
       Alert.alert(
         'Success',
@@ -76,7 +84,11 @@ const SignupScreen = ({ navigation }) => {
         ]
       );
     } catch (error) {
-      Alert.alert('Signup Failed', typeof error === 'string' ? error : 'Please try again.');
+      console.error('Signup error:', error);
+      Alert.alert(
+        'Signup Failed', 
+        typeof error === 'string' ? error : 'Please try again.\n\nMake sure the backend server is running.'
+      );
     } finally {
       setLoading(false);
     }
@@ -91,6 +103,7 @@ const SignupScreen = ({ navigation }) => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Logo and Header */}
           <View style={styles.header}>
@@ -105,7 +118,7 @@ const SignupScreen = ({ navigation }) => {
           <View style={styles.form}>
             {/* Full Name Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
+              <Text style={styles.label}>Full Name *</Text>
               <View style={[styles.inputWrapper, errors.fullName && styles.inputError]}>
                 <User color="#64748B" size={20} style={styles.inputIcon} />
                 <TextInput
@@ -118,6 +131,7 @@ const SignupScreen = ({ navigation }) => {
                     setErrors({ ...errors, fullName: null });
                   }}
                   autoCapitalize="words"
+                  editable={!loading}
                 />
               </View>
               {errors.fullName && <Text style={styles.errorText}>{errors.fullName}</Text>}
@@ -125,7 +139,7 @@ const SignupScreen = ({ navigation }) => {
 
             {/* Email Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>Email Address *</Text>
               <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
                 <Mail color="#64748B" size={20} style={styles.inputIcon} />
                 <TextInput
@@ -140,14 +154,32 @@ const SignupScreen = ({ navigation }) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!loading}
                 />
               </View>
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
 
+            {/* Phone Input (Optional) */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Phone Number (Optional)</Text>
+              <View style={styles.inputWrapper}>
+                <Phone color="#64748B" size={20} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="+94 XXX XXX XXX"
+                  placeholderTextColor="#94A3B8"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  editable={!loading}
+                />
+              </View>
+            </View>
+
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>Password *</Text>
               <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
                 <Lock color="#64748B" size={20} style={styles.inputIcon} />
                 <TextInput
@@ -161,10 +193,12 @@ const SignupScreen = ({ navigation }) => {
                   }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeIcon}
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeOff color="#64748B" size={20} />
@@ -178,7 +212,7 @@ const SignupScreen = ({ navigation }) => {
 
             {/* Confirm Password Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
+              <Text style={styles.label}>Confirm Password *</Text>
               <View style={[styles.inputWrapper, errors.confirmPassword && styles.inputError]}>
                 <Lock color="#64748B" size={20} style={styles.inputIcon} />
                 <TextInput
@@ -192,10 +226,12 @@ const SignupScreen = ({ navigation }) => {
                   }}
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
+                  editable={!loading}
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                   style={styles.eyeIcon}
+                  disabled={loading}
                 >
                   {showConfirmPassword ? (
                     <EyeOff color="#64748B" size={20} />
@@ -223,7 +259,10 @@ const SignupScreen = ({ navigation }) => {
             {/* Login Link */}
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Login')}
+                disabled={loading}
+              >
                 <Text style={styles.loginLink}>Sign In</Text>
               </TouchableOpacity>
             </View>

@@ -14,37 +14,37 @@ import { PlusCircle, Search, Filter, Clock, CheckCircle, AlertCircle } from 'luc
 const mockCases = [
   { 
     id: '1', 
-    title: 'Civil Case #1023', 
+    title: 'Divorce - Cruelty & Abandonment', 
     status: 'In Progress', 
-    date: '2023-10-15',
-    client: 'John Smith',
+    date: '2026-01-05',
+    client: 'Mrs. Nadeeka Perera',
     priority: 'High',
     progress: 65,
-    nextAction: 'Court hearing scheduled'
+    nextAction: 'File petition in District Court'
   },
   { 
     id: '2', 
-    title: 'Property Dispute', 
-    status: 'Closed', 
-    date: '2023-08-20',
-    client: 'Mary Johnson',
-    priority: 'Medium',
-    progress: 100,
-    nextAction: 'Case resolved'
+    title: 'Divorce - Adultery', 
+    status: 'Review', 
+    date: '2025-12-28',
+    client: 'Mr. Rohan Silva',
+    priority: 'High',
+    progress: 45,
+    nextAction: 'Evidence collection ongoing'
   },
   { 
     id: '3', 
-    title: 'Contract Negotiation', 
-    status: 'Review', 
-    date: '2023-11-01',
-    client: 'Tech Corp Inc.',
-    priority: 'High',
-    progress: 30,
-    nextAction: 'Document review pending'
+    title: 'Divorce - 4 Year Separation', 
+    status: 'Closed', 
+    date: '2025-11-15',
+    client: 'Mrs. Amali Fernando',
+    priority: 'Medium',
+    progress: 100,
+    nextAction: 'Decree nisi granted'
   }
 ];
 
-const CasesScreen = () => {
+const CasesScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVisible, setFilterVisible] = useState(false);
 
@@ -129,7 +129,9 @@ const CasesScreen = () => {
             <Text style={styles.header}>Your Case Files</Text>
             <Text style={styles.subHeader}>Manage and track your legal matters</Text>
           </View>
-          <TouchableOpacity style={styles.addButton}>
+          <TouchableOpacity style={styles.addButton}
+            onPress={() => navigation.navigate('NewCase')}>
+          
             <PlusCircle color="#FFFFFF" size={20} />
             <Text style={styles.addButtonText}>New Case</Text>
           </TouchableOpacity>
