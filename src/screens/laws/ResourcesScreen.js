@@ -305,7 +305,7 @@ const ResourcesScreen = ({ navigation }) => {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Search color="#999" size={20} style={styles.searchIcon} />
+        <Search color="#999" size={21} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Law Statutes"
