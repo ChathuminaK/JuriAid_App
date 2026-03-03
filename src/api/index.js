@@ -1,71 +1,103 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { configureStore } from '@reduxjs/toolkit';
-import authReducer from '../redux/slices/authSlice';
 
-// const COMPUTER_IP = '192.168.8.106'; my router
-const COMPUTER_IP = '192.168.119.189'; //samidi mobile
+const COMPUTER_IP = '192.168.8.106'; //my router
+//const COMPUTER_IP = '192.168.119.189'; //samidi mobile
 
+const API_URLS = {
+  AUTH:         `http://${COMPUTER_IP}:8001`,
+  PAST_CASE:    `http://${COMPUTER_IP}:8002`,
+  LAWSTATKG:    `http://${COMPUTER_IP}:8003`,
+  QUESTION_GEN: `http://${COMPUTER_IP}:8004`,
+  ORCHESTRATOR: `http://${COMPUTER_IP}:8000`,
+};
 
-export const BASE_URL = `http://${COMPUTER_IP}:8000`; // Orchestrator
-export const AUTH_BASE_URL = `http://${COMPUTER_IP}:8001`; // Auth Service
+// ─── Debug Logger ─────────────────────────────────────────────────────────────
+const DEBUG = true; // set false in production
 
-// Create axios instances
-export const orchestratorAPI = axios.create({
-  baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
+export const log = {
+  info:    (...args) => DEBUG && console.log('[API][INFO]',    ...args),
+  warn:    (...args) => DEBUG && console.warn('[API][WARN]',   ...args),
+  error:   (...args) => DEBUG && console.error('[API][ERROR]', ...args),
+  request: (method, url, data) => {
+    if (!DEBUG) return;
+    console.log(`[API][REQ] ${method.toUpperCase()} ${url}`);
+    if (data) console.log('[API][REQ][BODY]', JSON.stringify(data, null, 2));
   },
-  timeout: 30000,
-});
-
-export const authAPI = axios.create({
-  baseURL: AUTH_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
+  response: (url, status, data) => {
+    if (!DEBUG) return;
+    console.log(`[API][RES] ${url} → ${status}`);
+    if (data) console.log('[API][RES][DATA]', JSON.stringify(data, null, 2));
   },
-  timeout: 15000,
-});
+};
 
-// Request interceptor to add token
-const requestInterceptor = async (config) => {
-  try {
-    const token = await AsyncStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+// ─── Create Axios Instance ────────────────────────────────────────────────────
+const createInstance = (baseURL, name, timeout = 30000) => {
+  const instance = axios.create({
+    baseURL,
+    timeout,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  // Request interceptor
+  instance.interceptors.request.use(
+    async (config) => {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+          log.info(`[${name}] Token attached`);
+        }
+        log.request(config.method, `${baseURL}${config.url}`, config.data);
+      } catch (error) {
+        log.error(`[${name}] Error reading token:`, error.message);
+      }
+      return config;
+    },
+    (error) => {
+      log.error(`[${name}] Request error:`, error.message);
+      return Promise.reject(error);
     }
-  } catch (error) {
-    console.error('Error getting token:', error);
-  }
-  return config;
+  );
+
+  // Response interceptor
+  instance.interceptors.response.use(
+    (response) => {
+      log.response(
+        `${baseURL}${response.config.url}`,
+        response.status,
+        response.data
+      );
+      return response;
+    },
+    async (error) => {
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail;
+      const url    = error.config?.url;
+      log.error(`[${name}] ${status} ${url}`, detail || error.message);
+
+      if (status === 401) {
+        log.warn(`[${name}] 401 Unauthorized – clearing stored credentials`);
+        await AsyncStorage.removeItem('authToken');
+        await AsyncStorage.removeItem('userProfile');
+      }
+
+      return Promise.reject(error);
+    }
+  );
+
+  return instance;
 };
 
-orchestratorAPI.interceptors.request.use(requestInterceptor);
-authAPI.interceptors.request.use(requestInterceptor);
+export const authAPI         = createInstance(API_URLS.AUTH,         'AUTH',         15000);
+export const pastCaseAPI     = createInstance(API_URLS.PAST_CASE,    'PAST_CASE',    30000);
+export const lawStatKGAPI    = createInstance(API_URLS.LAWSTATKG,    'LAWSTATKG',    30000);
+export const questionGenAPI  = createInstance(API_URLS.QUESTION_GEN, 'QUESTION_GEN', 30000);
+export const orchestratorAPI = createInstance(API_URLS.ORCHESTRATOR, 'ORCHESTRATOR', 900000); // 15 min for AI pipeline
 
-// Response error handler
-const responseErrorHandler = async (error) => {
-  if (error.response?.status === 401) {
-    await AsyncStorage.removeItem('authToken');
-    await AsyncStorage.removeItem('userProfile');
-  }
-  return Promise.reject(error);
-};
+// Keep legacy named exports for backward compatibility
+export const BASE_URL      = API_URLS.ORCHESTRATOR;
+export const AUTH_BASE_URL = API_URLS.AUTH;
 
-orchestratorAPI.interceptors.response.use((response) => response, responseErrorHandler);
-authAPI.interceptors.response.use((response) => response, responseErrorHandler);
-
-export const store = configureStore({
-  reducer: {
-    auth: authReducer,
-  },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: {
-        // Ignore these action types
-        ignoredActions: ['auth/login/fulfilled', 'auth/signup/fulfilled'],
-      },
-    }),
-});
-
-export default { orchestratorAPI, authAPI, store };
+export { API_URLS };
+export default { authAPI, pastCaseAPI, lawStatKGAPI, questionGenAPI, orchestratorAPI };
