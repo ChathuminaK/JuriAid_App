@@ -1,26 +1,21 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
-import CasesScreen from '../screens/Cases/CasesScreen';
-import NewCaseScreen from '../screens/Cases/NewCaseScreen';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import CasesScreen              from '../screens/Cases/CasesScreen';
+import NewCaseScreen            from '../screens/Cases/NewCaseScreen';
 import CaseAnalysisResultScreen from '../screens/Cases/CaseAnalysisResultScreen';
 import GeneratedQuestionsScreen from '../screens/Cases/GeneratedQuestionsScreen';
+import ReportScreen             from '../screens/ReportScreen';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
-const CasesStackNavigator = () => {
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="CasesList" component={CasesScreen} />
-      <Stack.Screen name="NewCase" component={NewCaseScreen} />
-      <Stack.Screen name="CaseAnalysisResult" component={CaseAnalysisResultScreen} />
-      <Stack.Screen name="GeneratedQuestions" component={GeneratedQuestionsScreen} />
-
-    </Stack.Navigator>
-  );
-};
+const CasesStackNavigator = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="Cases"              component={CasesScreen} />
+    <Stack.Screen name="NewCase"            component={NewCaseScreen} />
+    <Stack.Screen name="CaseAnalysisResult" component={CaseAnalysisResultScreen} />
+    <Stack.Screen name="GeneratedQuestions" component={GeneratedQuestionsScreen} />
+    <Stack.Screen name="Report"             component={ReportScreen} />
+  </Stack.Navigator>
+);
 
 export default CasesStackNavigator;

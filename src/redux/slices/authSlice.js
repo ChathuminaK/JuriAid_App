@@ -1,194 +1,140 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authService } from '../../api/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import authService from '../../api/auth';
+import { log } from '../../api/index';
 
-// Async thunks
-export const login = createAsyncThunk(
-  'auth/login',
-  async ({ email, password }, { rejectWithValue }) => {
-    try {
-      const response = await authService.login(email, password);
-      const profile = await authService.getProfile();
-      return { ...response, user: profile };
-    } catch (error) {
-      return rejectWithValue(error);
+// ── Thunks ────────────────────────────────────────────────────────────────────
+
+export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWithValue }) => {
+  log.info('[authSlice] checkAuth started');
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (!token) {
+      log.info('[authSlice] checkAuth – no token in storage');
+      return rejectWithValue('No token');
     }
+    log.info('[authSlice] checkAuth – token found, verifying…');
+    const user = await authService.verifyToken();
+    log.info('[authSlice] checkAuth – verified:', user);
+    return { token, user };
+  } catch (error) {
+    log.error('[authSlice] checkAuth failed:', error);
+    await AsyncStorage.removeItem('token');
+    return rejectWithValue(error);
   }
-);
+});
 
-export const signup = createAsyncThunk(
-  'auth/signup',
-  async ({ email, password, fullName, phone }, { rejectWithValue }) => {
-    try {
-      const response = await authService.signup(email, password, fullName, phone);
-      return response;
-    } catch (error) {
-      return rejectWithValue(error);
+export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, { rejectWithValue }) => {
+  log.info('[authSlice] loginUser called', { email: credentials.email });
+  try {
+    const data = await authService.login(credentials);
+    if (data.access_token) {
+      await AsyncStorage.setItem('token', data.access_token);
+      log.info('[authSlice] loginUser – token stored');
     }
+    // Fetch profile after login
+    const user = await authService.getProfile();
+    log.info('[authSlice] loginUser – profile fetched:', user);
+    return { token: data.access_token, user };
+  } catch (error) {
+    log.error('[authSlice] loginUser failed:', error);
+    return rejectWithValue(error);
   }
-);
+});
 
-export const fetchProfile = createAsyncThunk(
-  'auth/fetchProfile',
-  async (_, { rejectWithValue }) => {
-    try {
-      const profile = await authService.getProfile();
-      return profile;
-    } catch (error) {
-      return rejectWithValue(error);
-    }
+export const signupUser = createAsyncThunk('auth/signupUser', async (userData, { rejectWithValue }) => {
+  log.info('[authSlice] signupUser called', { email: userData.email });
+  try {
+    const data = await authService.signup(userData);
+    log.info('[authSlice] signupUser success:', data);
+    return data;
+  } catch (error) {
+    log.error('[authSlice] signupUser failed:', error);
+    return rejectWithValue(error);
   }
-);
+});
 
-export const updateProfile = createAsyncThunk(
-  'auth/updateProfile',
-  async ({ fullName, phone }, { rejectWithValue }) => {
-    try {
-      const response = await authService.updateProfile(fullName, phone);
-      return response;
-    } catch (error) {
-      return rejectWithValue(error);
-    }
+export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { rejectWithValue }) => {
+  log.info('[authSlice] logoutUser called');
+  try {
+    await authService.logout();
+    await AsyncStorage.removeItem('token');
+    log.info('[authSlice] logoutUser – token removed');
+  } catch (error) {
+    log.warn('[authSlice] logoutUser server call failed (still clearing local token):', error);
+    await AsyncStorage.removeItem('token');
   }
-);
+});
 
-export const logout = createAsyncThunk(
-  'auth/logout',
-  async (_, { rejectWithValue }) => {
-    try {
-      await authService.logout();
-      return null;
-    } catch (error) {
-      return rejectWithValue(error);
-    }
-  }
-);
-
-export const checkAuth = createAsyncThunk(
-  'auth/checkAuth',
-  async (_, { rejectWithValue }) => {
-    try {
-      const token = await authService.getToken();
-      if (!token) {
-        return null;
-      }
-      const profile = await authService.getStoredProfile();
-      return { token, user: profile };
-    } catch (error) {
-      return rejectWithValue(error);
-    }
-  }
-);
-
-const initialState = {
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  loading: false,
-  error: null,
-  profileLoading: false,
-};
+// ── Slice ─────────────────────────────────────────────────────────────────────
 
 const authSlice = createSlice({
   name: 'auth',
-  initialState,
+  initialState: {
+    user:            null,
+    token:           null,
+    isAuthenticated: false,
+    loading:         false,
+    error:           null,
+  },
   reducers: {
-    clearError: (state) => {
-      state.error = null;
-    },
-    resetAuth: (state) => {
-      state.user = null;
-      state.token = null;
-      state.isAuthenticated = false;
-      state.error = null;
-    },
+    clearError: (state) => { state.error = null; },
   },
   extraReducers: (builder) => {
+    // checkAuth
     builder
-      // Login
-      .addCase(login.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(login.fulfilled, (state, action) => {
-        state.loading = false;
+      .addCase(checkAuth.pending,   (state) => { state.loading = true; state.error = null; })
+      .addCase(checkAuth.fulfilled, (state, { payload }) => {
+        state.loading         = false;
         state.isAuthenticated = true;
-        state.token = action.payload.access_token;
-        state.user = action.payload.user;
+        state.token           = payload.token;
+        state.user            = payload.user;
+        log.info('[authSlice] checkAuth.fulfilled – isAuthenticated=true');
       })
-      .addCase(login.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      
-      // Signup
-      .addCase(signup.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(signup.fulfilled, (state, action) => {
-        state.loading = false;
+      .addCase(checkAuth.rejected,  (state, { payload }) => {
+        state.loading         = false;
+        state.isAuthenticated = false;
+        state.token           = null;
+        state.user            = null;
+        log.info('[authSlice] checkAuth.rejected:', payload);
+      });
+
+    // loginUser
+    builder
+      .addCase(loginUser.pending,   (state) => { state.loading = true; state.error = null; })
+      .addCase(loginUser.fulfilled, (state, { payload }) => {
+        state.loading         = false;
         state.isAuthenticated = true;
-        state.token = action.payload.access_token;
+        state.token           = payload.token;
+        state.user            = payload.user;
+        log.info('[authSlice] loginUser.fulfilled – isAuthenticated=true');
       })
-      .addCase(signup.rejected, (state, action) => {
+      .addCase(loginUser.rejected,  (state, { payload }) => {
         state.loading = false;
-        state.error = action.payload;
-      })
-      
-      // Fetch Profile
-      .addCase(fetchProfile.pending, (state) => {
-        state.profileLoading = true;
-      })
-      .addCase(fetchProfile.fulfilled, (state, action) => {
-        state.profileLoading = false;
-        state.user = action.payload;
-      })
-      .addCase(fetchProfile.rejected, (state, action) => {
-        state.profileLoading = false;
-        state.error = action.payload;
-      })
-      
-      // Update Profile
-      .addCase(updateProfile.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.error   = typeof payload === 'string' ? payload : 'Login failed';
+        log.error('[authSlice] loginUser.rejected:', payload);
+      });
+
+    // signupUser
+    builder
+      .addCase(signupUser.pending,   (state) => { state.loading = true; state.error = null; })
+      .addCase(signupUser.fulfilled, (state) => { state.loading = false; })
+      .addCase(signupUser.rejected,  (state, { payload }) => {
         state.loading = false;
-        state.user = action.payload;
-      })
-      .addCase(updateProfile.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      
-      // Logout
-      .addCase(logout.fulfilled, (state) => {
-        state.user = null;
-        state.token = null;
+        state.error   = typeof payload === 'string' ? payload : 'Signup failed';
+        log.error('[authSlice] signupUser.rejected:', payload);
+      });
+
+    // logoutUser
+    builder
+      .addCase(logoutUser.fulfilled, (state) => {
         state.isAuthenticated = false;
-        state.loading = false;
-        state.error = null;
-      })
-      
-      // Check Auth
-      .addCase(checkAuth.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(checkAuth.fulfilled, (state, action) => {
-        state.loading = false;
-        if (action.payload) {
-          state.isAuthenticated = true;
-          state.token = action.payload.token;
-          state.user = action.payload.user;
-        }
-      })
-      .addCase(checkAuth.rejected, (state) => {
-        state.loading = false;
-        state.isAuthenticated = false;
+        state.token           = null;
+        state.user            = null;
+        log.info('[authSlice] logoutUser.fulfilled – cleared');
       });
   },
 });
 
-export const { clearError, resetAuth } = authSlice.actions;
+export const { clearError } = authSlice.actions;
 export default authSlice.reducer;
