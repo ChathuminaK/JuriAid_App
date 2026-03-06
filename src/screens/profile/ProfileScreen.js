@@ -9,6 +9,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { 
   ChevronRight, 
@@ -169,7 +170,14 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatar}>
-              <UserIcon color="#FFFFFF" size={48} />
+              {user?.profile_icon_url ? (
+                <Image
+                  source={{ uri: user.profile_icon_url }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <UserIcon color="#FFFFFF" size={48} />
+              )}
             </View>
           </View>
           <Text style={styles.userName}>
@@ -181,9 +189,13 @@ const ProfileScreen = ({ navigation }) => {
           {user?.phone && (
             <Text style={styles.userPhone}>{user.phone}</Text>
           )}
-          <Text style={styles.userRole}>Legal Professional</Text>
+          <Text style={styles.userRole}>
+            {user?.subscription_tier
+              ? user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)
+              : 'Free'}
+          </Text>
 
-          <View style={styles.profileStats}>
+          {/* <View style={styles.profileStats}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>15</Text>
               <Text style={styles.statLabel}>Active Cases</Text>
@@ -198,7 +210,7 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.statNumber}>98%</Text>
               <Text style={styles.statLabel}>Success Rate</Text>
             </View>
-          </View>
+          </View> */}
         </View>
 
         {/* Menu Sections */}
@@ -225,7 +237,6 @@ const ProfileScreen = ({ navigation }) => {
   );
 };
 
-// Styles remain mostly the same, add:
 const additionalStyles = {
   userPhone: {
     fontSize: 14,
@@ -259,23 +270,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#005A9C',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1E293B',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  userPhone: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 8,
-  },
+  avatarImage: { width: 120, height: 120, borderRadius: 60 },
+  userName: { fontSize: 24, fontWeight: 'bold', color: '#1E293B', marginBottom: 4 },
+  userEmail: { fontSize: 16, color: '#64748B', marginBottom: 4 },
+  userPhone: { fontSize: 14, color: '#64748B', marginBottom: 8 },
   userRole: {
     fontSize: 14,
     color: '#005A9C',
@@ -284,25 +284,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 8,
   },
-  profileStats: { flexDirection: 'row', alignItems: 'center' },
-  statItem: { alignItems: 'center', paddingHorizontal: 20 },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#005A9C',
-    marginBottom: 4,
-  },
-  statLabel: { fontSize: 12, color: '#64748B' },
-  statDivider: { width: 1, height: 30, backgroundColor: '#E2E8F0' },
   menuSection: { marginBottom: 24 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 12,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
   menuContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -321,11 +306,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  menuItemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   menuIconContainer: {
     width: 40,
     height: 40,
@@ -336,12 +317,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   menuTextContainer: { flex: 1 },
-  menuTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
+  menuTitle: { fontSize: 16, fontWeight: '600', color: '#1E293B', marginBottom: 2 },
   menuSubtitle: { fontSize: 13, color: '#64748B' },
   menuItemRight: { alignItems: 'center' },
   logoutButton: {
@@ -368,12 +344,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   logoutText: { fontSize: 16, color: '#EF4444', fontWeight: '600' },
-  versionText: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#94A3B8',
-    marginBottom: 20,
-  },
+  versionText: { textAlign: 'center', fontSize: 12, color: '#94A3B8', marginBottom: 20 },
 });
 
 export default ProfileScreen;
