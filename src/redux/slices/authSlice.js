@@ -8,7 +8,7 @@ import { log } from '../../api/index';
 export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWithValue }) => {
   log.info('[authSlice] checkAuth started');
   try {
-    const token = await AsyncStorage.getItem('token');
+    const token = await AsyncStorage.getItem('authToken'); // ← was 'token'
     if (!token) {
       log.info('[authSlice] checkAuth – no token in storage');
       return rejectWithValue('No token');
@@ -19,7 +19,7 @@ export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWi
     return { token, user };
   } catch (error) {
     log.error('[authSlice] checkAuth failed:', error);
-    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('authToken'); // ← was 'token'
     return rejectWithValue(error);
   }
 });
@@ -29,7 +29,7 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
   try {
     const data = await authService.login(credentials);
     if (data.access_token) {
-      await AsyncStorage.setItem('token', data.access_token);
+      await AsyncStorage.setItem('authToken', data.access_token); // ← was 'token'
       log.info('[authSlice] loginUser – token stored');
     }
     // Fetch profile after login
@@ -58,11 +58,11 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { reject
   log.info('[authSlice] logoutUser called');
   try {
     await authService.logout();
-    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('authToken'); // ← was 'token'
     log.info('[authSlice] logoutUser – token removed');
   } catch (error) {
     log.warn('[authSlice] logoutUser server call failed (still clearing local token):', error);
-    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('authToken'); // ← was 'token'
   }
 });
 
