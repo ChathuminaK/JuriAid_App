@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, Modal, Platform,
+  Alert, ActivityIndicator, Modal, Platform, PermissionsAndroid,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { saveReport } from '../../redux/slices/reportsSlice';
@@ -329,7 +329,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
     analysis_id:         analysisResult?.analysis_id,
     similar_cases_count: analysisResult?.similar_cases?.length,
     relevant_laws_count: analysisResult?.relevant_laws?.length,
-    questions_count:     analysisResult?.generated_questions?.length,
+    // questions_count:     analysisResult?.generated_questions?.length,
   });
 
   if (!analysisResult) {
@@ -373,31 +373,62 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
   // ── Download PDF ─────────────────────────────────────────────────────────
   const handleDownload = async () => {
     if (!RNHTMLtoPDF) {
-      Alert.alert('Not Available', 'Run:\n\nnpm install react-native-html-to-pdf\n\nthen rebuild the app.');
+      Alert.alert('Not Available', 'react-native-html-to-pdf is not linked. Please rebuild the app.');
       return;
     }
+
+    // Request storage permission on Android < 10 (API < 29)
+    if (Platform.OS === 'android' && Platform.Version < 29) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title:         'Storage Permission',
+          message:       'JuriAid needs storage access to save PDF reports.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission Denied', 'Storage permission is required to download reports.');
+        return;
+      }
+    }
+
     setDownloading(true);
     log.info('[CaseAnalysisResultScreen] generating PDF…', { analysis_id });
     try {
       const file = await RNHTMLtoPDF.convert({
-        html:      buildReportHTML(analysisResult),
-        fileName:  `JuriAid_Report_${analysis_id || Date.now()}`,
-        directory: Platform.OS === 'ios' ? 'Documents' : 'Download',
+        html:     buildReportHTML(analysisResult),
+        fileName: `JuriAid_Report_${analysis_id || Date.now()}`,
+        // No 'directory' — uses app's default files dir which is always writable
       });
-      log.info('[CaseAnalysisResultScreen] PDF generated:', file?.filePath);
+
+      log.info('[CaseAnalysisResultScreen] PDF result:', file);
+
       if (file?.filePath) {
         Alert.alert(
-          '📥 PDF Downloaded',
+          '📥 PDF Ready',
           `Saved to:\n${file.filePath}`,
           [
-            { text: 'Open', onPress: () => FileViewer?.open(file.filePath).catch(() => {}) },
+            {
+              text: 'Open',
+              onPress: () =>
+                FileViewer
+                  ? FileViewer.open(file.filePath).catch((e) => {
+                      log.error('[CaseAnalysisResultScreen] FileViewer error:', e);
+                      Alert.alert('Cannot Open', 'Use a file manager to open:\n' + file.filePath);
+                    })
+                  : Alert.alert('File Location', file.filePath),
+            },
             { text: 'OK' },
           ]
         );
+      } else {
+        Alert.alert('Download Issue', 'PDF was generated but the file path is unavailable.');
       }
     } catch (e) {
       log.error('[CaseAnalysisResultScreen] PDF generation failed:', e);
-      Alert.alert('Download Failed', 'Could not generate PDF. Please try again.');
+      Alert.alert('Download Failed', `Could not generate PDF.\n\n${e?.message || String(e)}`);
     } finally {
       setDownloading(false);
     }
@@ -413,8 +444,10 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
       const detail = await pastCaseService.getCaseById(caseItem.case_id);
       setSelectedCase(detail);
     } catch (error) {
-      log.error('[CaseAnalysisResultScreen] case detail failed:', error);
-      Alert.alert('Error', 'Failed to load case details.');
+      const msg = error === 'Network Error' || error?.message === 'Network Error'
+        ? 'Cannot reach the case database. Please check your connection.'
+        : 'Failed to load case details.';
+      Alert.alert('Error', msg);
       setModalVisible(false);
     } finally {
       setCaseDetailLoading(false);
@@ -506,9 +539,9 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
                   <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
                     {lawLabel(law.case_name, law.citation)}
                   </Text>
-                  <View style={styles.badge}>
+                  {/* <View style={styles.badge}>
                     <Text style={[styles.badgeText, { color: '#92400E' }]}>{relevancePct}%</Text>
-                  </View>
+                  </View> */}
                 </View>
                 <Text style={styles.tapHint}>👆 Tap to view full law detail</Text>
               </TouchableOpacity>

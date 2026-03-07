@@ -403,9 +403,9 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.aiSubtitle}>
                   Access comprehensive Sri Lankan divorce case analysis
                 </Text>
-                <View style={styles.aiStats}>
+                {/* <View style={styles.aiStats}>
                   <Text style={styles.aiStatsText}>2 Active Reports • Updated Today</Text>
-                </View>
+                </View> */}
               </View>
               <ChevronRight color="rgba(255,255,255,0.8)" size={24} />
             </View>
