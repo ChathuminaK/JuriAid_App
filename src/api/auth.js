@@ -1,146 +1,91 @@
-import { authAPI } from './index';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authAPI, log } from './index';
 
 export const authService = {
-  // Sign up (now includes phone support)
-  signup: async (email, password, fullName, phone = null) => {
+
+  // ── Sign Up ───────────────────────────────────────────────────────────────
+  signup: async ({ email, password, full_name, phone }) => {
+    log.info('[authService] signup called', { email, full_name, phone });
     try {
       const response = await authAPI.post('/auth/signup', {
-        email,
-        password,
-        full_name: fullName,
-        ...(phone && { phone }), // Include phone if provided
+        email, password, full_name, phone,
       });
-      
-      // Auto-store token after signup
-      if (response.data.access_token) {
-        await AsyncStorage.setItem('authToken', response.data.access_token);
-      }
-      
+      log.info('[authService] signup success:', response.data);
       return response.data;
     } catch (error) {
+      log.error('[authService] signup failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
       throw error.response?.data?.detail || 'Signup failed';
     }
   },
 
-  // Login
-  login: async (email, password) => {
+  // ── Login ────────────────────────────────────────────────────────────────
+  login: async ({ email, password }) => {
+    log.info('[authService] login called', { email });
     try {
-      const response = await authAPI.post('/auth/login', {
-        email,
-        password,
-      });
-      
-      // Store token
-      if (response.data.access_token) {
-        await AsyncStorage.setItem('authToken', response.data.access_token);
-      }
-      
-      return response.data;
+      const response = await authAPI.post('/auth/login', { email, password });
+      log.info('[authService] login success – token received:', !!response.data.access_token);
+      return response.data; // { access_token, token_type, ... }
     } catch (error) {
+      log.error('[authService] login failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
       throw error.response?.data?.detail || 'Login failed';
     }
   },
 
-  // Get user profile
-  getProfile: async () => {
-    try {
-      const response = await authAPI.get('/auth/me');
-      
-      // Store profile
-      await AsyncStorage.setItem('userProfile', JSON.stringify(response.data));
-      
-      return response.data;
-    } catch (error) {
-      throw error.response?.data?.detail || 'Failed to fetch profile';
-    }
-  },
-
-  // Update user profile
-  updateProfile: async (fullName, phone) => {
-    try {
-      const response = await authAPI.put('/auth/me', {
-        full_name: fullName,
-        phone,
-      });
-      
-      // Update stored profile
-      await AsyncStorage.setItem('userProfile', JSON.stringify(response.data));
-      
-      return response.data;
-    } catch (error) {
-      throw error.response?.data?.detail || 'Failed to update profile';
-    }
-  },
-
-  // Verify token
+  // ── Verify Token ─────────────────────────────────────────────────────────
   verifyToken: async () => {
+    log.info('[authService] verifyToken called');
     try {
       const response = await authAPI.get('/auth/verify');
+      log.info('[authService] verifyToken success:', response.data);
       return response.data;
     } catch (error) {
+      log.error('[authService] verifyToken failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
       throw error.response?.data?.detail || 'Token verification failed';
     }
   },
 
-  // Logout
+  // ── Get Profile ───────────────────────────────────────────────────────────
+  getProfile: async () => {
+    log.info('[authService] getProfile called');
+    try {
+      const response = await authAPI.get('/auth/me');
+      log.info('[authService] getProfile success:', response.data);
+      return response.data;
+    } catch (error) {
+      log.error('[authService] getProfile failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
+      throw error.response?.data?.detail || 'Failed to get profile';
+    }
+  },
+
+  // ── Logout ────────────────────────────────────────────────────────────────
   logout: async () => {
+    log.info('[authService] logout called');
     try {
-      // Call backend logout endpoint
-      await authAPI.post('/auth/logout');
-      
-      // Clear local storage
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('userProfile');
-      
-      return { success: true, message: 'Logged out successfully' };
+      const response = await authAPI.post('/auth/logout');
+      log.info('[authService] logout success');
+      return response.data;
     } catch (error) {
-      // Even if backend call fails, clear local storage
-      await AsyncStorage.removeItem('authToken');
-      await AsyncStorage.removeItem('userProfile');
-      
-      console.error('Logout error:', error);
-      return { success: false, message: 'Logged out locally' };
-    }
-  },
-
-  // Check if user is authenticated
-  isAuthenticated: async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) return false;
-      
-      // Optionally verify token with backend
-      try {
-        await authService.verifyToken();
-        return true;
-      } catch {
-        // Token invalid, clear storage
-        await AsyncStorage.removeItem('authToken');
-        await AsyncStorage.removeItem('userProfile');
-        return false;
-      }
-    } catch (error) {
-      return false;
-    }
-  },
-
-  // Get stored token
-  getToken: async () => {
-    try {
-      return await AsyncStorage.getItem('authToken');
-    } catch (error) {
-      return null;
-    }
-  },
-
-  // Get stored profile
-  getStoredProfile: async () => {
-    try {
-      const profile = await AsyncStorage.getItem('userProfile');
-      return profile ? JSON.parse(profile) : null;
-    } catch (error) {
-      return null;
+      log.error('[authService] logout failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
+      throw error.response?.data?.detail || 'Logout failed';
     }
   },
 };

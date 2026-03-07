@@ -1,913 +1,501 @@
 import React, { useState } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  Animated,
-  Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Alert, ActivityIndicator, Modal, Platform,
 } from 'react-native';
-import {
-  ArrowLeft,
-  Scale,
-  BookOpen,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  ExternalLink,
-  AlertCircle,
-  CheckCircle2,
-  Gavel,
-  Users,
-  Calendar,
-  Download,
-  Sparkles,
-} from 'lucide-react-native';
+import { useDispatch, useSelector } from 'react-redux';
+import { saveReport } from '../../redux/slices/reportsSlice';
+import { log } from '../../api/index';
+import pastCaseService from '../../api/pastcase';
 
-const CaseAnalysisResultScreen = ({ navigation, route }) => {
-  const [expandedSections, setExpandedSections] = useState({
-    summary: true,
-    laws: true,
-    cases: true,
+// ── PDF packages (safe import) ─────────────────────────────────────────────
+let RNHTMLtoPDF = null;
+let FileViewer  = null;
+try { RNHTMLtoPDF = require('react-native-html-to-pdf').default; } catch (e) { log.warn('[CaseAnalysisResultScreen] react-native-html-to-pdf not installed'); }
+try { FileViewer  = require('react-native-file-viewer').default; } catch (e) { log.warn('[CaseAnalysisResultScreen] react-native-file-viewer not installed'); }
+
+// ─── Markdown renderer (## header, **bold**) ──────────────────────────────
+const renderFormattedText = (text) => {
+  if (!text) return null;
+  return text.split('\n').map((line, i) => {
+    if (line.startsWith('## '))
+      return <Text key={i} style={styles.mdHeader}>{line.replace('## ', '')}</Text>;
+    if (line.startsWith('### '))
+      return <Text key={i} style={styles.mdSubHeader}>{line.replace('### ', '')}</Text>;
+    if (line.trim() === '')
+      return <Text key={i} style={styles.mdSpacer}>{' '}</Text>;
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    return (
+      <Text key={i} style={styles.mdText}>
+        {parts.map((part, j) =>
+          part.startsWith('**') && part.endsWith('**')
+            ? <Text key={j} style={styles.mdBold}>{part.slice(2, -2)}</Text>
+            : <Text key={j}>{part}</Text>
+        )}
+        {'\n'}
+      </Text>
+    );
+  });
+};
+
+const ScoreBadge = ({ score }) => {
+  const pct   = Math.round((score || 0) * 100);
+  const color = pct >= 60 ? '#16A34A' : pct >= 40 ? '#D97706' : '#DC2626';
+  return (
+    <View style={[styles.badge, { backgroundColor: `${color}20` }]}>
+      <Text style={[styles.badgeText, { color }]}>{pct}%</Text>
+    </View>
+  );
+};
+
+const ExpandableCard = ({ children }) => {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => setExpanded(!expanded)}
+      style={styles.expandableCard}
+    >
+      {children(expanded)}
+      <Text style={styles.expandToggle}>{expanded ? '▲ Show less' : '▼ Show more'}</Text>
+    </TouchableOpacity>
+  );
+};
+
+const CaseDetailModal = ({ visible, caseData, loading, onClose }) => (
+  <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+    <View style={styles.modalContainer}>
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle} numberOfLines={2}>
+          {caseData?.case_name || 'Case Details'}
+        </Text>
+        <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+          <Text style={styles.modalCloseText}>✕ Close</Text>
+        </TouchableOpacity>
+      </View>
+      {loading ? (
+        <View style={styles.modalLoading}>
+          <ActivityIndicator size="large" color="#005A9C" />
+          <Text style={styles.modalLoadingText}>Loading case details…</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+          {caseData?.complaint && (
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>📋 Complaint</Text>
+              <Text style={styles.modalBodyText}>{caseData.complaint}</Text>
+            </View>
+          )}
+          {caseData?.defense && (
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>🛡 Defense</Text>
+              <Text style={styles.modalBodyText}>{caseData.defense}</Text>
+            </View>
+          )}
+        </ScrollView>
+      )}
+    </View>
+  </Modal>
+);
+
+// ─── Build HTML for PDF ────────────────────────────────────────────────────
+const buildReportHTML = (result) => {
+  const casesHTML = (result.similar_cases || []).map((c) => `
+    <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:6px;">
+      <b>${c.case_name || ''}</b><br/>
+      <span style="color:#16A34A;">${Math.round((c.score||0)*100)}% match</span><br/>
+      <span>${c.summary || ''}</span>
+    </div>`).join('');
+
+  const lawsHTML = (result.relevant_laws || []).map((l) => `
+    <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:6px;">
+      <b>${l.title || l.act_id || ''}</b><br/>
+      <span>Section ${l.section || ''}: ${l.section_title || ''}</span><br/>
+      <span>${l.content || ''}</span>
+    </div>`).join('');
+
+  const questionsHTML = (result.generated_questions || []).map((q) => `
+    <div style="margin-bottom:8px;padding:8px;background:#f5f5f5;border-radius:6px;">
+      <b>Q${q.question_id}:</b> ${q.question || ''}
+    </div>`).join('');
+
+  return `<html><head><meta charset="utf-8"/>
+    <style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#1E293B;}
+      h1{color:#005A9C;font-size:20px;}
+      h2{color:#005A9C;font-size:15px;margin-top:20px;border-bottom:1px solid #005A9C;padding-bottom:4px;}
+      p{font-size:13px;line-height:1.6;}
+    </style></head><body>
+    <h1>⚖️ JuriAid – Case Analysis Report</h1>
+    <p>Analysis ID: ${result.analysis_id || 'N/A'}</p>
+    <p>Generated: ${new Date().toLocaleString()}</p>
+    <h2>Case Summary</h2>
+    <p>${(result.case_summary || '').replace(/\n/g, '<br/>')}</p>
+    <h2>Similar Cases (${(result.similar_cases||[]).length})</h2>
+    ${casesHTML || '<p>None</p>'}
+    <h2>Relevant Laws (${(result.relevant_laws||[]).length})</h2>
+    ${lawsHTML || '<p>None</p>'}
+    <h2>Generated Questions (${(result.generated_questions||[]).length})</h2>
+    ${questionsHTML || '<p>None</p>'}
+  </body></html>`;
+};
+
+// ─── Main Screen ──────────────────────────────────────────────────────────
+const CaseAnalysisResultScreen = ({ route, navigation }) => {
+  const dispatch      = useDispatch();
+  const savedReports  = useSelector((state) => state.reports.savedReports);
+  const { analysisResult } = route.params;
+
+  const [activeTab, setActiveTab]               = useState('summary');
+  const [modalVisible, setModalVisible]         = useState(false);
+  const [selectedCase, setSelectedCase]         = useState(null);
+  const [caseDetailLoading, setCaseDetailLoading] = useState(false);
+  const [saving, setSaving]                     = useState(false);
+  const [downloading, setDownloading]           = useState(false);
+
+  const isAlreadySaved = savedReports.some(
+    (r) => r.analysis_id === analysisResult?.analysis_id
+  );
+
+  log.info('[CaseAnalysisResultScreen] mounted', {
+    analysis_id:         analysisResult?.analysis_id,
+    similar_cases_count: analysisResult?.similar_cases?.length,
+    relevant_laws_count: analysisResult?.relevant_laws?.length,
+    questions_count:     analysisResult?.generated_questions?.length,
   });
 
-  // Extract data from API response
-  const { analysisData } = route.params || {};
-  
-  // Parse API response structure
-  const parseApiResponse = (data) => {
-    console.log('[CaseAnalysisResult] Parsing API response:', data);
-    
-    if (!data || !data.results) {
-      console.log('[CaseAnalysisResult] No data or results - using fallback');
-      return null; // Use hardcoded fallback
+  if (!analysisResult) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>No analysis result found.</Text>
+      </View>
+    );
+  }
+
+  const {
+    analysis_id,
+    case_summary        = '',
+    similar_cases       = [],
+    relevant_laws       = [],
+    generated_questions = [],
+    metadata            = {},
+    created_at,
+    processing_time_seconds,
+  } = analysisResult;
+
+  // ── Save Report ─────────────────────────────────────────────────────────
+  const handleSave = () => {
+    if (isAlreadySaved) {
+      Alert.alert('Already Saved', 'This report is already in your Reports tab.');
+      return;
     }
-
-    const parsed = {
-      summary: null,
-      relevantLaws: [],
-      relevantCases: [],
-      recommendedActions: [],
-    };
-
-    // Extract data from results array
-    data.results.forEach(result => {
-      console.log(`[CaseAnalysisResult] Processing tool: ${result.tool}`);
-      
-      // Handle both 'summarize' and 'core_summary'
-      if ((result.tool === 'summarize' || result.tool === 'core_summary') && result.output) {
-        console.log('[CaseAnalysisResult] Found summary data:', result.output);
-        parsed.summary = {
-          title: result.output.title || 'Case Analysis',
-          type: result.output.type || data.case_type || 'Legal Matter',
-          description: result.output.description || 'No description available',
-          parties: result.output.parties || { plaintiff: 'Petitioner', defendant: 'Respondent' },
-          dateFilied: result.output.dateFilied || result.output.dateFiled || 'Not specified',
-          damagesClaimed: result.output.damagesClaimed || 'To be determined',
-        };
-        parsed.recommendedActions = result.output.recommendedActions || [];
-      }
-      
-      if (result.tool === 'family_statutes' && result.output) {
-        console.log('[CaseAnalysisResult] Found statutes:', result.output.length);
-        parsed.relevantLaws = Array.isArray(result.output) ? result.output : [];
-      }
-      
-      if (result.tool === 'family_precedents' && result.output) {
-        console.log('[CaseAnalysisResult] Found precedents:', result.output.length);
-        parsed.relevantCases = Array.isArray(result.output) ? result.output : [];
-      }
-    });
-
-    console.log('[CaseAnalysisResult] Parsed data:', {
-      hasSummary: !!parsed.summary,
-      lawsCount: parsed.relevantLaws.length,
-      casesCount: parsed.relevantCases.length,
-      actionsCount: parsed.recommendedActions.length,
-    });
-
-    return parsed;
-  };
-
-  // Try to use API data, fallback to hardcoded
-  const apiData = parseApiResponse(analysisData);
-  console.log('[CaseAnalysisResult] Using API data?', !!apiData);
-  
-  const caseData = apiData || {
-    summary: {
-      title: "Divorce Case - Cruelty and Abandonment",
-      type: "Matrimonial Law",
-      description: "The wife seeks divorce on grounds of cruelty and abandonment under the Divorce Act. The wife alleges continuous physical and mental cruelty by the husband over a period of 3 years, including verbal abuse, threats, and physical assault. Additionally, the husband abandoned the matrimonial home 18 months ago without providing financial support or communication. The wife seeks divorce, maintenance, and custody of their two minor children.",
-      parties: {
-        plaintiff: "Wife (Petitioner)",
-        defendant: "Husband (Respondent)"
-      },
-      dateFilied: "November 10, 2025",
-      damagesClaimed: "Divorce decree, Monthly maintenance Rs. 50,000, Child custody",
-    },
-    relevantLaws: [
-      {
-        id: '1',
-        code: "Divorce Act (Chapter 51) - Section 2",
-        title: "Grounds for Divorce - Cruelty",
-        description: "Defines cruelty as grounds for divorce under Sri Lankan matrimonial law",
-        applicability: "High",
-        keyPoints: [
-          "Physical violence causing bodily harm",
-          "Mental cruelty causing reasonable apprehension of harm",
-          "Persistent pattern of conduct making cohabitation impossible",
-          "Courts assess cruelty based on conduct, not subjective feelings"
-        ]
-      },
-      {
-        id: '2',
-        code: "Divorce Act - Section 3",
-        title: "Malicious Abandonment",
-        description: "Addresses abandonment as grounds for divorce without reasonable cause",
-        applicability: "High",
-        keyPoints: [
-          "Intentional separation for continuous period of one year or more",
-          "Abandonment must be without reasonable cause",
-          "Failure to provide maintenance during abandonment",
-          "No intention to return to matrimonial home"
-        ]
-      },
-      {
-        id: '3',
-        code: "Maintenance Act (Chapter 37)",
-        title: "Maintenance for Wife and Children",
-        description: "Governs financial support obligations for dependents",
-        applicability: "High",
-        keyPoints: [
-          "Court considers earning capacity of both parties",
-          "Standard of living during marriage",
-          "Needs of children including education and healthcare",
-          "Court may order interim and permanent maintenance"
-        ]
-      }
-    ],
-    relevantCases: [
-      {
-        id: '1',
-        title: "Fernando v Fernando (2018)",
-        citation: "2 SLR 145",
-        court: "Supreme Court of Sri Lanka",
-        year: "2018",
-        relevance: "High",
-        summary: "Landmark case interpreting the definition of cruelty under the Divorce Act, particularly mental cruelty and its impact on matrimonial relationship",
-        keyHolding: "Mental cruelty includes conduct that causes reasonable apprehension of danger to life, limb or health, whether mental or physical. The test is objective - whether a reasonable person would find the conduct unbearable.",
-        applicablePoints: [
-          "Definition and scope of mental cruelty",
-          "Burden of proof lies on petitioner to establish cruelty",
-          "Pattern of conduct to be considered, not isolated incidents",
-          "Court must assess impact on petitioner's wellbeing"
-        ],
-        outcome: "Petitioner granted divorce - mental cruelty established through pattern of degrading treatment"
-      },
-      {
-        id: '2',
-        title: "Perera v Perera (2016)",
-        citation: "1 SLR 298",
-        court: "Court of Appeal, Sri Lanka",
-        year: "2016",
-        relevance: "High",
-        summary: "Addressed the requirements for proving malicious abandonment and its interaction with maintenance obligations",
-        keyHolding: "Abandonment must be willful and without just cause. Mere physical separation does not constitute abandonment if there is reasonable cause. Failure to provide maintenance strengthens the case for abandonment.",
-        applicablePoints: [
-          "Elements required to prove abandonment",
-          "Relevance of financial support during separation",
-          "Intention to permanently desert must be demonstrated",
-          "Communication attempts and reconciliation efforts considered"
-        ],
-        outcome: "Divorce granted on grounds of abandonment - husband left without cause and failed to maintain wife"
-      },
-      {
-        id: '3',
-        title: "Silva v Silva (2020)",
-        citation: "3 SLR 67",
-        court: "High Court of Colombo",
-        year: "2020",
-        relevance: "Medium",
-        summary: "Established principles for determining maintenance amounts in divorce proceedings with custody considerations",
-        keyHolding: "Maintenance must be calculated considering the standard of living during marriage, earning capacity of both parties, and the best interests of children. Court may order interim maintenance pending final decree.",
-        applicablePoints: [
-          "Factors for calculating maintenance payments",
-          "Interim vs. permanent maintenance orders",
-          "Child custody and its impact on maintenance",
-          "Enforcement mechanisms for maintenance orders"
-        ],
-        outcome: "Monthly maintenance of Rs. 45,000 awarded to wife with child custody"
-      }
-    ],
-    recommendedActions: [
-      {
-        id: '1',
-        action: "Collect Evidence of Cruelty",
-        priority: "High",
-        description: "Gather medical records, police complaints, photographs of injuries, and witness statements documenting instances of physical and mental cruelty"
-      },
-      {
-        id: '2',
-        action: "Document Abandonment Timeline",
-        priority: "High",
-        description: "Prepare detailed chronology of husband's departure, attempts at communication, and lack of financial support over the 18-month period"
-      },
-      {
-        id: '3',
-        action: "File for Interim Maintenance",
-        priority: "High",
-        description: "Apply for interim maintenance and custody orders pending the final divorce decree to secure immediate financial support"
-      },
-      {
-        id: '4',
-        action: "Review Precedent Cases",
-        priority: "Medium",
-        description: "Study Fernando v Fernando (2018) and Perera v Perera (2016) to understand how courts interpret cruelty and abandonment"
-      },
-      {
-        id: '5',
-        action: "Prepare Financial Affidavit",
-        priority: "Medium",
-        description: "Complete comprehensive financial disclosure including income, assets, liabilities, and monthly expenses for maintenance determination"
-      }
-    ]
-  };
-
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
-  const getApplicabilityColor = (level) => {
-    switch (level) {
-      case 'High': return '#10B981';
-      case 'Medium': return '#F59E0B';
-      case 'Low': return '#64748B';
-      default: return '#64748B';
+    setSaving(true);
+    try {
+      dispatch(saveReport(analysisResult));
+      log.info('[CaseAnalysisResultScreen] report saved', { analysis_id });
+      Alert.alert('Saved ✅', 'Report saved to your Reports tab.');
+    } catch (e) {
+      log.error('[CaseAnalysisResultScreen] save failed:', e);
+      Alert.alert('Error', 'Failed to save report.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getRelevanceColor = (level) => {
-    switch (level) {
-      case 'High': return '#10B981';
-      case 'Medium': return '#F59E0B';
-      case 'Low': return '#64748B';
-      default: return '#64748B';
+  // ── Download PDF ─────────────────────────────────────────────────────────
+  const handleDownload = async () => {
+    if (!RNHTMLtoPDF) {
+      Alert.alert('Not Available', 'Run:\n\nnpm install react-native-html-to-pdf\n\nthen rebuild the app.');
+      return;
+    }
+    setDownloading(true);
+    log.info('[CaseAnalysisResultScreen] generating PDF…', { analysis_id });
+    try {
+      const file = await RNHTMLtoPDF.convert({
+        html:      buildReportHTML(analysisResult),
+        fileName:  `JuriAid_Report_${analysis_id || Date.now()}`,
+        directory: Platform.OS === 'ios' ? 'Documents' : 'Download',
+      });
+
+      log.info('[CaseAnalysisResultScreen] PDF generated:', file?.filePath);
+
+      if (file?.filePath) {
+        Alert.alert(
+          '📥 PDF Downloaded',
+          `Saved to:\n${file.filePath}`,
+          [
+            { text: 'Open',   onPress: () => FileViewer?.open(file.filePath).catch(() => {}) },
+            { text: 'OK' },
+          ]
+        );
+      }
+    } catch (e) {
+      log.error('[CaseAnalysisResultScreen] PDF generation failed:', e);
+      Alert.alert('Download Failed', 'Could not generate PDF. Please try again.');
+    } finally {
+      setDownloading(false);
     }
   };
 
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'High': return '#EF4444';
-      case 'Medium': return '#F59E0B';
-      case 'Low': return '#10B981';
-      default: return '#64748B';
+  // ── Open Case Detail Modal ───────────────────────────────────────────────
+  const handleCasePress = async (caseItem) => {
+    log.info('[CaseAnalysisResultScreen] case pressed', { case_id: caseItem.case_id });
+    setSelectedCase({ case_name: caseItem.case_name });
+    setModalVisible(true);
+    setCaseDetailLoading(true);
+    try {
+      const detail = await pastCaseService.getCaseById(caseItem.case_id);
+      setSelectedCase(detail);
+    } catch (error) {
+      log.error('[CaseAnalysisResultScreen] case detail failed:', error);
+      Alert.alert('Error', 'Failed to load case details.');
+      setModalVisible(false);
+    } finally {
+      setCaseDetailLoading(false);
+    }
+  };
+
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+  const tabs = [
+    { key: 'summary',   label: '📋 Summary' },
+    { key: 'cases',     label: `📂 Cases (${similar_cases.length})` },
+    { key: 'laws',      label: `⚖️ Laws (${relevant_laws.length})` },
+    { key: 'questions', label: `❓ Q&A (${generated_questions.length})` },
+  ];
+
+  const renderSummary = () => (
+    <View>
+      <View style={styles.metaCard}>
+        <Text style={styles.metaRow}>📄 <Text style={styles.metaValue}>{metadata.filename}</Text></Text>
+        <Text style={styles.metaRow}>📦 <Text style={styles.metaValue}>{metadata.file_size_mb?.toFixed(2)} MB</Text></Text>
+        <Text style={styles.metaRow}>⏱ <Text style={styles.metaValue}>{processing_time_seconds?.toFixed(1)} s</Text></Text>
+        <Text style={styles.metaRow}>🕐 <Text style={styles.metaValue}>{new Date(created_at).toLocaleString()}</Text></Text>
+      </View>
+      <View style={styles.summaryCard}>{renderFormattedText(case_summary)}</View>
+    </View>
+  );
+
+  const renderSimilarCases = () => {
+    if (similar_cases.length === 0)
+      return <Text style={styles.emptyText}>No similar cases found.</Text>;
+    return similar_cases.map((c, idx) => (
+      <ExpandableCard key={c.case_id || idx}>
+        {(expanded) => (
+          <>
+            <TouchableOpacity onPress={() => handleCasePress(c)} style={styles.caseCardHeader} activeOpacity={0.7}>
+              <View style={styles.caseCardTitleRow}>
+                <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>{c.case_name}</Text>
+                <ScoreBadge score={c.score} />
+              </View>
+              <Text style={styles.tapHint}>👆 Tap title to view full case</Text>
+            </TouchableOpacity>
+            <Text style={styles.cardReason}>{c.reason}</Text>
+            <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 4}>{c.summary}</Text>
+          </>
+        )}
+      </ExpandableCard>
+    ));
+  };
+
+  const renderRelevantLaws = () => {
+    if (relevant_laws.length === 0)
+      return <Text style={styles.emptyText}>No relevant laws found.</Text>;
+    return relevant_laws.map((law, idx) => (
+      <ExpandableCard key={`${law.act_id}-${idx}`}>
+        {(expanded) => (
+          <>
+            <View style={styles.caseCardTitleRow}>
+              <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
+                Section {law.section}: {law.section_title}
+              </Text>
+              <View style={styles.badge}>
+                <Text style={[styles.badgeText, { color: '#92400E' }]}>
+                  {Math.round((law.relevance_score || 0) * 100)}%
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.actTitle}>{law.title}</Text>
+            <Text style={styles.actId}>Act: {law.act_id}</Text>
+            {law.content && (
+              <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 3}>{law.content}</Text>
+            )}
+          </>
+        )}
+      </ExpandableCard>
+    ));
+  };
+
+  const renderQuestions = () => {
+    if (generated_questions.length === 0)
+      return <Text style={styles.emptyText}>No questions generated.</Text>;
+    return generated_questions.map((q, idx) => (
+      <View key={q.question_id || idx} style={styles.questionCard}>
+        <Text style={styles.questionNumber}>Q{q.question_id ?? idx + 1}</Text>
+        <Text style={styles.questionText}>{q.question}</Text>
+      </View>
+    ));
+  };
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'summary':   return renderSummary();
+      case 'cases':     return renderSimilarCases();
+      case 'laws':      return renderRelevantLaws();
+      case 'questions': return renderQuestions();
+      default:          return null;
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft color="#1E293B" size={24} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Generate Client Questions</Text>
-          <Text style={styles.headerSubtitle}>AI-Generated Legal Insights</Text>
-        </View>
-        <TouchableOpacity style={styles.downloadButton}>
-          <Download color="#005A9C" size={20} />
+        <Text style={styles.headerTitle}>Analysis Result</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {/* Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar}>
+        {tabs.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, activeTab === t.key && styles.activeTab]}
+            onPress={() => setActiveTab(t.key)}
+          >
+            <Text style={[styles.tabText, activeTab === t.key && styles.activeTabText]}>
+              {t.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Content */}
+      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+        {renderTabContent()}
+      </ScrollView>
+
+      {/* ── Save & Download Buttons ── */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={[styles.saveBtn, isAlreadySaved && styles.savedBtn, saving && styles.disabledBtn]}
+          onPress={handleSave}
+          disabled={saving || isAlreadySaved}
+        >
+          {saving
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.actionBtnText}>{isAlreadySaved ? '✅ Saved' : '💾 Save Report'}</Text>
+          }
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.downloadBtn, downloading && styles.disabledBtn]}
+          onPress={handleDownload}
+          disabled={downloading}
+        >
+          {downloading
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.actionBtnText}>📥 Download PDF</Text>
+          }
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Case Summary Section */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => toggleSection('summary')}
-          >
-            <View style={styles.sectionTitleContainer}>
-              <FileText color="#005A9C" size={24} />
-              <Text style={styles.sectionTitle}>Case Summary</Text>
-            </View>
-            {expandedSections.summary ? (
-              <ChevronUp color="#64748B" size={20} />
-            ) : (
-              <ChevronDown color="#64748B" size={20} />
-            )}
-          </TouchableOpacity>
-
-          {expandedSections.summary && (
-            <View style={styles.sectionContent}>
-              <View style={styles.caseHeader}>
-                <Text style={styles.caseTitle}>{caseData.summary.title}</Text>
-                <View style={styles.caseTypeBadge}>
-                  <Text style={styles.caseTypeText}>{caseData.summary.type}</Text>
-                </View>
-              </View>
-
-              <View style={styles.caseMetadata}>
-                <View style={styles.metadataItem}>
-                  <Users color="#64748B" size={16} />
-                  <Text style={styles.metadataText}>
-                    {caseData.summary.parties.plaintiff} v. {caseData.summary.parties.defendant}
-                  </Text>
-                </View>
-                <View style={styles.metadataItem}>
-                  <Calendar color="#64748B" size={16} />
-                  <Text style={styles.metadataText}>{caseData.summary.dateFilied}</Text>
-                </View>
-                <View style={styles.metadataItem}>
-                  <AlertCircle color="#64748B" size={16} />
-                  <Text style={styles.metadataText}>
-                    Damages: {caseData.summary.damagesClaimed}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.descriptionText}>{caseData.summary.description}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Relevant Laws Section */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => toggleSection('laws')}
-          >
-            <View style={styles.sectionTitleContainer}>
-              <Scale color="#667EEA" size={24} />
-              <View>
-                <Text style={styles.sectionTitle}>Relevant Laws</Text>
-                <Text style={styles.sectionCount}>{caseData.relevantLaws.length} statutes identified</Text>
-              </View>
-            </View>
-            {expandedSections.laws ? (
-              <ChevronUp color="#64748B" size={20} />
-            ) : (
-              <ChevronDown color="#64748B" size={20} />
-            )}
-          </TouchableOpacity>
-
-          {expandedSections.laws && (
-            <View style={styles.sectionContent}>
-              {caseData.relevantLaws.map((law) => (
-                <View key={law.id} style={styles.lawCard}>
-                  <View style={styles.lawHeader}>
-                    <View style={styles.lawCodeContainer}>
-                      <Gavel color="#667EEA" size={18} />
-                      <Text style={styles.lawCode}>{law.code}</Text>
-                    </View>
-                    <View style={[
-                      styles.applicabilityBadge,
-                      { backgroundColor: `${getApplicabilityColor(law.applicability)}15` }
-                    ]}>
-                      <Text style={[
-                        styles.applicabilityText,
-                        { color: getApplicabilityColor(law.applicability) }
-                      ]}>
-                        {law.applicability}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.lawTitle}>{law.title}</Text>
-                  <Text style={styles.lawDescription}>{law.description}</Text>
-
-                  <View style={styles.keyPointsContainer}>
-                    <Text style={styles.keyPointsTitle}>Key Points:</Text>
-                    {law.keyPoints.map((point, index) => (
-                      <View key={index} style={styles.keyPoint}>
-                        <View style={styles.bulletPoint} />
-                        <Text style={styles.keyPointText}>{point}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity style={styles.viewMoreButton}>
-                    <ExternalLink color="#005A9C" size={16} />
-                    <Text style={styles.viewMoreText}>View Full Statute</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Relevant Past Cases Section */}
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.sectionHeader}
-            onPress={() => toggleSection('cases')}
-          >
-            <View style={styles.sectionTitleContainer}>
-              <BookOpen color="#10B981" size={24} />
-              <View>
-                <Text style={styles.sectionTitle}>Relevant Past Cases</Text>
-                <Text style={styles.sectionCount}>{caseData.relevantCases.length} precedents found</Text>
-              </View>
-            </View>
-            {expandedSections.cases ? (
-              <ChevronUp color="#64748B" size={20} />
-            ) : (
-              <ChevronDown color="#64748B" size={20} />
-            )}
-          </TouchableOpacity>
-
-          {expandedSections.cases && (
-            <View style={styles.sectionContent}>
-              {caseData.relevantCases.map((case_) => (
-                <View key={case_.id} style={styles.caseCard}>
-                  <View style={styles.caseCardHeader}>
-                    <View style={styles.caseNameContainer}>
-                      <Text style={styles.caseName}>{case_.title}</Text>
-                      <View style={[
-                        styles.relevanceBadge,
-                        { backgroundColor: `${getRelevanceColor(case_.relevance)}15` }
-                      ]}>
-                        <Text style={[
-                          styles.relevanceText,
-                          { color: getRelevanceColor(case_.relevance) }
-                        ]}>
-                          {case_.relevance} Relevance
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.caseCitation}>
-                    <Text style={styles.citationText}>{case_.citation}</Text>
-                    <Text style={styles.courtText}>{case_.court} ({case_.year})</Text>
-                  </View>
-
-                  <View style={styles.caseSection}>
-                    <Text style={styles.caseSectionTitle}>Summary</Text>
-                    <Text style={styles.caseSectionText}>{case_.summary}</Text>
-                  </View>
-
-                  <View style={styles.caseSection}>
-                    <Text style={styles.caseSectionTitle}>Key Holding</Text>
-                    <Text style={styles.keyHoldingText}>{case_.keyHolding}</Text>
-                  </View>
-
-                  <View style={styles.caseSection}>
-                    <Text style={styles.caseSectionTitle}>Applicable Points</Text>
-                    {case_.applicablePoints.map((point, index) => (
-                      <View key={index} style={styles.applicablePoint}>
-                        <CheckCircle2 color="#10B981" size={16} />
-                        <Text style={styles.applicablePointText}>{point}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <View style={styles.outcomeContainer}>
-                    <Text style={styles.outcomeLabel}>Outcome:</Text>
-                    <Text style={styles.outcomeText}>{case_.outcome}</Text>
-                  </View>
-
-                  <TouchableOpacity style={styles.readCaseButton}>
-                    <BookOpen color="#005A9C" size={16} />
-                    <Text style={styles.readCaseText}>Read Full Case</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Recommended Actions */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <AlertCircle color="#F59E0B" size={24} />
-              <Text style={styles.sectionTitle}>Recommended Actions</Text>
-            </View>
-          </View>
-
-          <View style={styles.sectionContent}>
-            {caseData.recommendedActions.map((action) => (
-              <View key={action.id} style={styles.actionCard}>
-                <View style={styles.actionHeader}>
-                  <Text style={styles.actionTitle}>{action.action}</Text>
-                  <View style={[
-                    styles.priorityBadge,
-                    { backgroundColor: `${getPriorityColor(action.priority)}15` }
-                  ]}>
-                    <Text style={[
-                      styles.priorityText,
-                      { color: getPriorityColor(action.priority) }
-                    ]}>
-                      {action.priority}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.actionDescription}>{action.description}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Generate Questions Button - Only show for full analysis */}
-        {(caseData.relevantLaws.length > 0 || caseData.relevantCases.length > 0) && (
-          <TouchableOpacity 
-            style={styles.generateQuestionsButton}
-            onPress={() => {
-              console.log('[Navigation] Attempting to navigate to GeneratedQuestions');
-              console.log('[Navigation] Current route params:', route.params);
-              
-              try {
-                navigation.navigate('GeneratedQuestions', {
-                  caseTitle: caseData.summary?.title || 'Case Analysis',
-                  analysisData: analysisData, // Pass full API response
-                });
-              } catch (error) {
-                console.error('[Navigation Error]:', error);
-                Alert.alert('Navigation Error', error.toString());
-              }
-            }}
-          >
-            <Sparkles color="#FFFFFF" size={22} />
-            <Text style={styles.generateQuestionsText}>Generate Client Questions</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+      {/* Case Detail Modal */}
+      <CaseDetailModal
+        visible={modalVisible}
+        caseData={selectedCase}
+        loading={caseDetailLoading}
+        onClose={() => { setModalVisible(false); setSelectedCase(null); }}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  container:        { flex: 1, backgroundColor: '#F8FAFC' },
+  errorContainer:   { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText:        { color: '#DC2626', fontSize: 16 },
+
   header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0',
+  },
+  backBtn:          { padding: 4 },
+  backText:         { color: '#005A9C', fontSize: 15 },
+  headerTitle:      { fontSize: 17, fontWeight: 'bold', color: '#1E293B' },
+
+  tabBar:           { backgroundColor: '#fff', maxHeight: 50, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  tab:              { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  activeTab:        { borderBottomColor: '#005A9C' },
+  tabText:          { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  activeTabText:    { color: '#005A9C', fontWeight: '700' },
+
+  body:             { flex: 1 },
+  bodyContent:      { padding: 16, paddingBottom: 16 },
+
+  metaCard:         { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  metaRow:          { fontSize: 13, color: '#64748B', marginBottom: 4 },
+  metaValue:        { color: '#1E293B', fontWeight: '600' },
+
+  summaryCard:      { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  mdHeader:         { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginTop: 12, marginBottom: 4 },
+  mdSubHeader:      { fontSize: 14, fontWeight: 'bold', color: '#334155', marginTop: 8, marginBottom: 2 },
+  mdText:           { fontSize: 14, color: '#374151', lineHeight: 22 },
+  mdBold:           { fontWeight: 'bold', color: '#1E293B' },
+  mdSpacer:         { fontSize: 6 },
+
+  expandableCard:   { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  expandToggle:     { fontSize: 12, color: '#005A9C', marginTop: 8, textAlign: 'right' },
+
+  caseCardHeader:   { marginBottom: 4 },
+  caseCardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+  cardTitle:        { fontSize: 14, fontWeight: '700', color: '#1E293B', flex: 1, marginRight: 8 },
+  tapHint:          { fontSize: 11, color: '#3B82F6', marginBottom: 6 },
+  cardReason:       { fontSize: 12, color: '#64748B', fontStyle: 'italic', marginBottom: 6 },
+  cardBody:         { fontSize: 13, color: '#374151', lineHeight: 20 },
+
+  actTitle:         { fontSize: 12, color: '#3B82F6', marginBottom: 2 },
+  actId:            { fontSize: 11, color: '#94A3B8', marginBottom: 6 },
+
+  badge:            { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#FEF3C7' },
+  badgeText:        { fontSize: 11, fontWeight: '700' },
+
+  questionCard:     { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', flexDirection: 'row', alignItems: 'flex-start' },
+  questionNumber:   { fontSize: 13, fontWeight: 'bold', color: '#005A9C', marginRight: 10, minWidth: 28 },
+  questionText:     { fontSize: 14, color: '#374151', lineHeight: 20, flex: 1 },
+  emptyText:        { textAlign: 'center', color: '#94A3B8', fontSize: 14, marginTop: 40 },
+
+  // ── Bottom Action Buttons ──
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  downloadButton: {
-    padding: 8,
-    backgroundColor: '#EBF4FF',
-    borderRadius: 12,
-  },
-  content: {
-    flex: 1,
-  },
-  section: {
-    marginTop: 16,
-    marginHorizontal: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#FFFFFF',
-  },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  sectionCount: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  sectionContent: {
-    padding: 20,
-    paddingTop: 0,
-  },
-  caseHeader: {
-    marginBottom: 16,
-  },
-  caseTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  caseTypeBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#EBF4FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  caseTypeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#005A9C',
-  },
-  caseMetadata: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  metadataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metadataText: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  descriptionText: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#475569',
-  },
-  lawCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#667EEA',
-  },
-  lawHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  lawCodeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  lawCode: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#667EEA',
-  },
-  applicabilityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  applicabilityText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  lawTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  lawDescription: {
-    fontSize: 14,
-    color: '#64748B',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  keyPointsContainer: {
-    marginBottom: 12,
-  },
-  keyPointsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
-  keyPoint: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  bulletPoint: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#667EEA',
-    marginTop: 6,
-    marginRight: 8,
-  },
-  keyPointText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  viewMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  viewMoreText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#005A9C',
-  },
-  caseCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#10B981',
-  },
-  caseCardHeader: {
-    marginBottom: 12,
-  },
-  caseNameContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  caseName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    flex: 1,
-  },
-  relevanceBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  relevanceText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  caseCitation: {
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  citationText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontStyle: 'italic',
-    marginBottom: 4,
-  },
-  courtText: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  caseSection: {
-    marginBottom: 12,
-  },
-  caseSectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  caseSectionText: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 20,
-  },
-  keyHoldingText: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 20,
-    fontStyle: 'italic',
-    backgroundColor: '#FEF3C7',
-    padding: 10,
-    borderRadius: 8,
-  },
-  applicablePoint: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  applicablePointText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 18,
-    marginLeft: 8,
-  },
-  outcomeContainer: {
-    backgroundColor: '#FFFFFF',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
+    gap: 10,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
-  outcomeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  outcomeText: {
-    fontSize: 13,
-    color: '#1E293B',
-    lineHeight: 18,
-  },
-  readCaseButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  readCaseText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#005A9C',
-  },
-  actionCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
-  },
-  actionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  actionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-    flex: 1,
-  },
-  priorityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  priorityText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  actionDescription: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-  },
-  generateQuestionsButton: {
-    flexDirection: 'row',
-    backgroundColor: '#667EEA',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    shadowColor: '#667EEA',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  generateQuestionsText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
+  saveBtn:          { flex: 1, backgroundColor: '#005A9C', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  savedBtn:         { backgroundColor: '#22C55E' },
+  downloadBtn:      { flex: 1, backgroundColor: '#0F766E', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  disabledBtn:      { opacity: 0.6 },
+  actionBtnText:    { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // ── Modal ──
+  modalContainer:   { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  modalTitle:       { fontSize: 15, fontWeight: 'bold', color: '#1E293B', flex: 1, marginRight: 8 },
+  modalCloseBtn:    { padding: 6 },
+  modalCloseText:   { color: '#DC2626', fontSize: 14, fontWeight: '600' },
+  modalLoading:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  modalLoadingText: { marginTop: 12, color: '#64748B', fontSize: 14 },
+  modalBody:        { flex: 1 },
+  modalContent:     { padding: 16, paddingBottom: 40 },
+  modalSection:     { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  modalSectionTitle:{ fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 10 },
+  modalBodyText:    { fontSize: 14, color: '#374151', lineHeight: 22 },
 });
 
 export default CaseAnalysisResultScreen;
