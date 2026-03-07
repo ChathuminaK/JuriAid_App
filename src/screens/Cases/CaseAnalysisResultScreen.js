@@ -70,6 +70,12 @@ const renderCaseText = (text) => {
 
 const cleanText = (text) => text ? text.replace(/\[Page \d+\]/g, '').trim() : text;
 
+// ─── Helper: "Case Name — Citation" ───────────────────────────────────────
+const lawLabel = (caseName, citation) => {
+  if (caseName && citation) return `${caseName} — ${citation}`;
+  return caseName || citation || '';
+};
+
 const ScoreBadge = ({ score }) => {
   const pct   = Math.round((score || 0) * 100);
   const color = pct >= 60 ? '#16A34A' : pct >= 40 ? '#D97706' : '#DC2626';
@@ -165,10 +171,10 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
   const heldText      = (lawData?.held || []).join('\n\n');
 
   const sections = [
-    principleText                   ? { key: 'principle', label: '⚖️ Principle'   } : null,
-    lawData?.section_content        ? { key: 'section',   label: '📖 Section'     } : null,
-    lawData?.facts                  ? { key: 'facts',     label: '📋 Facts'       } : null,
-    heldText                        ? { key: 'held',      label: '🔖 Held'        } : null,
+    principleText            ? { key: 'principle', label: '⚖️ Principle' } : null,
+    lawData?.section_content ? { key: 'section',   label: '📖 Section'   } : null,
+    lawData?.facts           ? { key: 'facts',     label: '📋 Facts'     } : null,
+    heldText                 ? { key: 'held',      label: '🔖 Held'      } : null,
   ].filter(Boolean);
 
   const contentMap = {
@@ -182,7 +188,6 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
     lawData?.chapter        && { label: 'Chapter',   value: lawData.chapter },
     lawData?.source_title   && { label: 'Source',    value: lawData.source_title },
     lawData?.section_number && { label: 'Section',   value: lawData.section_number },
-    lawData?.citation       && { label: 'Citation',  value: lawData.citation },
     lawData?.topic          && { label: 'Topic',     value: lawData.topic },
     lawData?.court          && { label: 'Court',     value: lawData.court },
   ].filter(Boolean);
@@ -190,10 +195,10 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalContainer}>
-        {/* Header */}
+        {/* Header — "Case Name — Citation" */}
         <View style={[styles.modalHeader, { backgroundColor: '#065F46' }]}>
-          <Text style={styles.modalTitle} numberOfLines={2}>
-            {lawData?.case_name || 'Law Details'}
+          <Text style={styles.modalTitle} numberOfLines={3}>
+            {lawLabel(lawData?.case_name, lawData?.citation) || 'Law Details'}
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
             <Text style={styles.modalCloseText}>✕ Close</Text>
@@ -207,7 +212,6 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
           </View>
         ) : (
           <>
-            {/* Meta info bar */}
             {metaItems.length > 0 && (
               <View style={styles.lawMetaBar}>
                 {metaItems.map((m, i) => (
@@ -216,7 +220,6 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
                     {m.value}
                   </Text>
                 ))}
-                {/* Relevant sections chips */}
                 {(lawData?.relevant_sections || []).length > 0 && (
                   <View style={styles.chipRow}>
                     {lawData.relevant_sections.map((s, i) => (
@@ -229,7 +232,6 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
               </View>
             )}
 
-            {/* Tabs */}
             {sections.length > 1 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalTabBar}>
                 {sections.map((s) => (
@@ -246,7 +248,6 @@ const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
               </ScrollView>
             )}
 
-            {/* Content */}
             <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
               {contentMap[activeSection]
                 ? renderCaseText(contentMap[activeSection])
@@ -271,8 +272,7 @@ const buildReportHTML = (result) => {
 
   const lawsHTML = (result.relevant_laws || []).map((l) => `
     <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:6px;">
-      <b>${l.case_name || ''}</b><br/>
-      ${l.citation ? `<span style="color:#555;">${l.citation}</span><br/>` : ''}
+      <b>${l.case_name && l.citation ? `${l.case_name} — ${l.citation}` : l.case_name || l.citation || ''}</b><br/>
       ${l.section_number ? `<span>Section ${l.section_number}${l.section_title ? ': ' + l.section_title : ''}</span><br/>` : ''}
       <span>${(l.principle || []).join(' ')}</span>
     </div>`).join('');
@@ -428,7 +428,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
       return;
     }
     log.info('[CaseAnalysisResultScreen] law pressed', { case_id: lawItem.case_id });
-    setSelectedLaw({ case_name: lawItem.case_name });
+    setSelectedLaw({ case_name: lawItem.case_name, citation: lawItem.citation });
     setLawModalVisible(true);
     setLawDetailLoading(true);
     try {
@@ -489,11 +489,11 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
       return <Text style={styles.emptyText}>No relevant laws found.</Text>;
     return relevant_laws.map((law, idx) => {
       const principleText = (law.principle || []).join('\n\n');
+      const relevancePct  = Math.round(Math.min(law.support_score || 0, 1.0) * 100);
+      const topicLabel    = law.topic ? law.topic.replace(/_/g, ' ') : '';
       const sectionLabel  = law.section_number
         ? `Section ${law.section_number}${law.section_title ? ': ' + law.section_title : ''}`
         : law.case_name;
-      const relevancePct  = Math.round(Math.min(law.support_score || 0, 1.0) * 100);
-      const topicLabel    = law.topic ? law.topic.replace(/_/g, ' ') : '';
       const citationLabel = law.citation ? `  •  ${law.citation}` : '';
 
       return (
@@ -502,19 +502,19 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
             <>
               <TouchableOpacity onPress={() => handleLawPress(law)} style={styles.caseCardHeader} activeOpacity={0.7}>
                 <View style={styles.caseCardTitleRow}>
+                  {/* "Case Name — Citation" as the primary title */}
                   <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
-                    {sectionLabel}
+                    {lawLabel(law.case_name, law.citation)}
                   </Text>
                   <View style={styles.badge}>
                     <Text style={[styles.badgeText, { color: '#92400E' }]}>{relevancePct}%</Text>
                   </View>
                 </View>
-                {law.section_number ? (
-                  <Text style={styles.actTitle}>{law.case_name}</Text>
-                ) : null}
                 <Text style={styles.tapHint}>👆 Tap to view full law detail</Text>
               </TouchableOpacity>
-              <Text style={styles.actId}>{topicLabel}{citationLabel}</Text>
+              <Text style={styles.actId}>
+                {topicLabel}{sectionLabel ? `  •  ${sectionLabel}` : ''}
+              </Text>
               {principleText ? (
                 <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 3}>{principleText}</Text>
               ) : null}
@@ -700,6 +700,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#005A9C', borderBottomWidth: 1, borderBottomColor: '#004080',
   },
   modalTitle:       { fontSize: 15, fontWeight: 'bold', color: '#fff', flex: 1, marginRight: 8 },
+  modalSubtitle:    { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 3 },
   modalCloseBtn:    { padding: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 },
   modalCloseText:   { color: '#fff', fontSize: 13, fontWeight: '600' },
   modalLoading:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -715,8 +716,8 @@ const styles = StyleSheet.create({
   lawActiveTab:     { borderBottomColor: '#065F46' },
   lawActiveTabText: { color: '#065F46', fontWeight: '700' },
 
-  modalBody:        { flex: 1 },
-  modalContent:     { padding: 16, paddingBottom: 40 },
+  modalBody:    { flex: 1 },
+  modalContent: { padding: 16, paddingBottom: 40 },
 
   // ── Law meta bar ──
   lawMetaBar: {
