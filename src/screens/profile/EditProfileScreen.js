@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { 
   ArrowLeft, 
@@ -20,6 +21,7 @@ import {
   Save,
   Camera,
 } from 'lucide-react-native';
+import { pick, types } from '@react-native-documents/picker';
 import { useDispatch, useSelector } from 'react-redux';
 import { updateProfile, fetchProfile } from '../../redux/slices/authSlice';
 
@@ -30,6 +32,7 @@ const EditProfileScreen = ({ navigation }) => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [profileImage, setProfileImage] = useState(null);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
@@ -46,19 +49,27 @@ const EditProfileScreen = ({ navigation }) => {
     }
   }, [user]);
 
+  const handlePickImage = async () => {
+    try {
+      const results = await pick({ type: [types.images], allowMultiSelection: false });
+      if (results && results[0]) {
+        setProfileImage(results[0]);
+      }
+    } catch (err) {
+      // user cancelled — do nothing
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
-
     if (!fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     } else if (fullName.trim().length < 2) {
       newErrors.fullName = 'Full name must be at least 2 characters';
     }
-
     if (phone && phone.trim() && !/^[\d\s\+\-\(\)]+$/.test(phone)) {
       newErrors.phone = 'Invalid phone number format';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -67,22 +78,17 @@ const EditProfileScreen = ({ navigation }) => {
     if (!validateForm()) {
       return;
     }
-
     try {
       await dispatch(updateProfile({
         fullName: fullName.trim(),
         phone: phone.trim() || null,
+        profileImage: profileImage || null,
       })).unwrap();
 
       Alert.alert(
         'Success',
         'Profile updated successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       Alert.alert(
@@ -102,6 +108,8 @@ const EditProfileScreen = ({ navigation }) => {
       </SafeAreaView>
     );
   }
+
+  const avatarSource = profileImage?.uri || user?.profile_icon_url;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -142,11 +150,18 @@ const EditProfileScreen = ({ navigation }) => {
           <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
-                <User color="#FFFFFF" size={48} />
+                {avatarSource ? (
+                  <Image
+                    source={{ uri: avatarSource }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <User color="#FFFFFF" size={48} />
+                )}
               </View>
               <TouchableOpacity 
                 style={styles.cameraButton}
-                onPress={() => Alert.alert('Info', 'Profile picture upload coming soon!')}
+                onPress={handlePickImage}
                 disabled={loading}
               >
                 <Camera color="#FFFFFF" size={18} />
@@ -227,12 +242,20 @@ const EditProfileScreen = ({ navigation }) => {
               <View style={styles.infoCard}>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Account Type</Text>
-                  <Text style={styles.infoValue}>Legal Professional</Text>
+                  <Text style={styles.infoValue}>
+                    {user?.subscription_tier
+                      ? user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)
+                      : 'Free'}
+                  </Text>
                 </View>
                 <View style={styles.infoDivider} />
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Member Since</Text>
-                  <Text style={styles.infoValue}>January 2026</Text>
+                  <Text style={styles.infoValue}>
+                    {user?.created_at
+                      ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                      : 'N/A'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -272,13 +295,8 @@ const EditProfileScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  keyboardView: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -289,36 +307,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  saveButton: {
-    padding: 8,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748B',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: '#1E293B' },
+  saveButton: { padding: 8 },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#64748B' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20 },
+  avatarSection: { alignItems: 'center', marginBottom: 32 },
+  avatarContainer: { position: 'relative', marginBottom: 12 },
   avatar: {
     width: 120,
     height: 120,
@@ -328,12 +324,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     borderColor: '#FFFFFF',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
+  avatarImage: { width: 120, height: 120, borderRadius: 60 },
   cameraButton: {
     position: 'absolute',
     bottom: 0,
@@ -352,22 +350,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  avatarHint: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  form: {
-    flex: 1,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 8,
-  },
+  avatarHint: { fontSize: 14, color: '#64748B' },
+  form: { flex: 1 },
+  inputGroup: { marginBottom: 24 },
+  label: { fontSize: 14, fontWeight: '600', color: '#1E293B', marginBottom: 8 },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -377,46 +363,15 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     paddingHorizontal: 16,
   },
-  inputError: {
-    borderColor: '#EF4444',
-  },
-  inputDisabled: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    height: 52,
-    fontSize: 16,
-    color: '#1E293B',
-  },
-  disabledText: {
-    color: '#94A3B8',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#EF4444',
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  infoSection: {
-    marginBottom: 24,
-  },
-  infoSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 12,
-  },
+  inputError: { borderColor: '#EF4444' },
+  inputDisabled: { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, height: 52, fontSize: 16, color: '#1E293B' },
+  disabledText: { color: '#94A3B8' },
+  errorText: { fontSize: 12, color: '#EF4444', marginTop: 4, marginLeft: 4 },
+  helperText: { fontSize: 12, color: '#64748B', marginTop: 4, marginLeft: 4 },
+  infoSection: { marginBottom: 24 },
+  infoSectionTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
   infoCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -430,20 +385,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  infoDivider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#64748B',
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
+  infoDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 8 },
+  infoLabel: { fontSize: 14, color: '#64748B' },
+  infoValue: { fontSize: 14, fontWeight: '600', color: '#1E293B' },
   submitButton: {
     flexDirection: 'row',
     backgroundColor: '#005A9C',
@@ -459,24 +403,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  cancelButton: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748B',
-  },
+  submitButtonDisabled: { opacity: 0.6 },
+  submitButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  cancelButton: { paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  cancelButtonText: { fontSize: 16, fontWeight: '600', color: '#64748B' },
 });
 
 export default EditProfileScreen;

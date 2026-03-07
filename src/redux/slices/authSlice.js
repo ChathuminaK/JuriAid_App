@@ -8,18 +8,19 @@ import { log } from '../../api/index';
 export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWithValue }) => {
   log.info('[authSlice] checkAuth started');
   try {
-    const token = await AsyncStorage.getItem('authToken'); // ← was 'token'
+    const token = await AsyncStorage.getItem('authToken');
     if (!token) {
       log.info('[authSlice] checkAuth – no token in storage');
       return rejectWithValue('No token');
     }
     log.info('[authSlice] checkAuth – token found, verifying…');
-    const user = await authService.verifyToken();
-    log.info('[authSlice] checkAuth – verified:', user);
+    await authService.verifyToken();
+    const user = await authService.getProfile();
+    log.info('[authSlice] checkAuth – profile loaded:', user);
     return { token, user };
   } catch (error) {
     log.error('[authSlice] checkAuth failed:', error);
-    await AsyncStorage.removeItem('authToken'); // ← was 'token'
+    await AsyncStorage.removeItem('authToken');
     return rejectWithValue(error);
   }
 });
@@ -29,10 +30,9 @@ export const loginUser = createAsyncThunk('auth/loginUser', async (credentials, 
   try {
     const data = await authService.login(credentials);
     if (data.access_token) {
-      await AsyncStorage.setItem('authToken', data.access_token); // ← was 'token'
+      await AsyncStorage.setItem('authToken', data.access_token);
       log.info('[authSlice] loginUser – token stored');
     }
-    // Fetch profile after login
     const user = await authService.getProfile();
     log.info('[authSlice] loginUser – profile fetched:', user);
     return { token: data.access_token, user };
@@ -58,11 +58,35 @@ export const logoutUser = createAsyncThunk('auth/logoutUser', async (_, { reject
   log.info('[authSlice] logoutUser called');
   try {
     await authService.logout();
-    await AsyncStorage.removeItem('authToken'); // ← was 'token'
+    await AsyncStorage.removeItem('authToken');
     log.info('[authSlice] logoutUser – token removed');
   } catch (error) {
     log.warn('[authSlice] logoutUser server call failed (still clearing local token):', error);
-    await AsyncStorage.removeItem('authToken'); // ← was 'token'
+    await AsyncStorage.removeItem('authToken');
+  }
+});
+
+export const fetchProfile = createAsyncThunk('auth/fetchProfile', async (_, { rejectWithValue }) => {
+  log.info('[authSlice] fetchProfile called');
+  try {
+    const user = await authService.getProfile();
+    log.info('[authSlice] fetchProfile success:', user);
+    return user;
+  } catch (error) {
+    log.error('[authSlice] fetchProfile failed:', error);
+    return rejectWithValue(error);
+  }
+});
+
+export const updateProfile = createAsyncThunk('auth/updateProfile', async ({ fullName, phone, profileImage }, { rejectWithValue }) => {
+  log.info('[authSlice] updateProfile called');
+  try {
+    const user = await authService.updateProfile({ full_name: fullName, phone, profileImage });
+    log.info('[authSlice] updateProfile success:', user);
+    return user;
+  } catch (error) {
+    log.error('[authSlice] updateProfile failed:', error);
+    return rejectWithValue(error);
   }
 });
 
@@ -75,6 +99,7 @@ const authSlice = createSlice({
     token:           null,
     isAuthenticated: false,
     loading:         false,
+    profileLoading:  false,
     error:           null,
   },
   reducers: {
@@ -133,8 +158,31 @@ const authSlice = createSlice({
         state.user            = null;
         log.info('[authSlice] logoutUser.fulfilled – cleared');
       });
+
+    // fetchProfile
+    builder
+      .addCase(fetchProfile.pending,   (state) => { state.profileLoading = true; })
+      .addCase(fetchProfile.fulfilled, (state, { payload }) => {
+        state.profileLoading = false;
+        state.user = payload;
+      })
+      .addCase(fetchProfile.rejected,  (state) => { state.profileLoading = false; });
+
+    // updateProfile
+    builder
+      .addCase(updateProfile.pending,   (state) => { state.loading = true; state.error = null; })
+      .addCase(updateProfile.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.user = payload;
+      })
+      .addCase(updateProfile.rejected,  (state, { payload }) => {
+        state.loading = false;
+        state.error = typeof payload === 'string' ? payload : 'Update failed';
+      });
   },
 });
 
 export const { clearError } = authSlice.actions;
+export const logout = logoutUser;
 export default authSlice.reducer;
+

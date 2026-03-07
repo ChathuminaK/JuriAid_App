@@ -132,8 +132,8 @@ const NewCaseScreen = ({ navigation }) => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>New Case Analysis</Text>
-      <Text style={styles.subtitle}>Upload a Sri Lankan matrimonial case PDF (max 10 MB)</Text>
+      <Text style={styles.title}>Divorce Case Analysis Agent</Text>
+      <Text style={styles.subtitle}>Upload a Sri Lankan matrimonial case PDF (English) (max 10 MB)</Text>
 
       {/* File Picker Button */}
       <TouchableOpacity
