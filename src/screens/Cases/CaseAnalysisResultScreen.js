@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { saveReport } from '../../redux/slices/reportsSlice';
 import { log } from '../../api/index';
 import pastCaseService from '../../api/pastcase';
+import lawStatKGService from '../../api/lawstatkg';
 
 // ── PDF packages (safe import) ─────────────────────────────────────────────
 let RNHTMLtoPDF = null;
@@ -112,7 +113,6 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalContainer}>
-        {/* Modal Header */}
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle} numberOfLines={2}>
             {caseData?.case_name || 'Case Details'}
@@ -129,13 +129,8 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => {
           </View>
         ) : (
           <>
-            {/* Section Tabs */}
             {sections.length > 1 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.modalTabBar}
-              >
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalTabBar}>
                 {sections.map((s) => (
                   <TouchableOpacity
                     key={s.key}
@@ -149,8 +144,109 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => {
                 ))}
               </ScrollView>
             )}
+            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+              {contentMap[activeSection]
+                ? renderCaseText(contentMap[activeSection])
+                : <Text style={styles.emptyText}>No content available.</Text>
+              }
+            </ScrollView>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+};
 
-            {/* Section Content */}
+// ─── Law Detail Modal ─────────────────────────────────────────────────────
+const LawDetailModal = ({ visible, lawData, loading, onClose }) => {
+  const [activeSection, setActiveSection] = useState('principle');
+
+  const principleText = (lawData?.principle || []).join('\n\n');
+  const heldText      = (lawData?.held || []).join('\n\n');
+
+  const sections = [
+    principleText                   ? { key: 'principle', label: '⚖️ Principle'   } : null,
+    lawData?.section_content        ? { key: 'section',   label: '📖 Section'     } : null,
+    lawData?.facts                  ? { key: 'facts',     label: '📋 Facts'       } : null,
+    heldText                        ? { key: 'held',      label: '🔖 Held'        } : null,
+  ].filter(Boolean);
+
+  const contentMap = {
+    principle: principleText,
+    section:   lawData?.section_content,
+    facts:     lawData?.facts,
+    held:      heldText,
+  };
+
+  const metaItems = [
+    lawData?.chapter        && { label: 'Chapter',   value: lawData.chapter },
+    lawData?.source_title   && { label: 'Source',    value: lawData.source_title },
+    lawData?.section_number && { label: 'Section',   value: lawData.section_number },
+    lawData?.citation       && { label: 'Citation',  value: lawData.citation },
+    lawData?.topic          && { label: 'Topic',     value: lawData.topic },
+    lawData?.court          && { label: 'Court',     value: lawData.court },
+  ].filter(Boolean);
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalContainer}>
+        {/* Header */}
+        <View style={[styles.modalHeader, { backgroundColor: '#065F46' }]}>
+          <Text style={styles.modalTitle} numberOfLines={2}>
+            {lawData?.case_name || 'Law Details'}
+          </Text>
+          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+            <Text style={styles.modalCloseText}>✕ Close</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.modalLoading}>
+            <ActivityIndicator size="large" color="#065F46" />
+            <Text style={styles.modalLoadingText}>Loading law details…</Text>
+          </View>
+        ) : (
+          <>
+            {/* Meta info bar */}
+            {metaItems.length > 0 && (
+              <View style={styles.lawMetaBar}>
+                {metaItems.map((m, i) => (
+                  <Text key={i} style={styles.lawMetaItem}>
+                    <Text style={styles.lawMetaLabel}>{m.label}: </Text>
+                    {m.value}
+                  </Text>
+                ))}
+                {/* Relevant sections chips */}
+                {(lawData?.relevant_sections || []).length > 0 && (
+                  <View style={styles.chipRow}>
+                    {lawData.relevant_sections.map((s, i) => (
+                      <View key={i} style={styles.chip}>
+                        <Text style={styles.chipText}>§ {s}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Tabs */}
+            {sections.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modalTabBar}>
+                {sections.map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[styles.modalTab, activeSection === s.key && styles.lawActiveTab]}
+                    onPress={() => setActiveSection(s.key)}
+                  >
+                    <Text style={[styles.modalTabText, activeSection === s.key && styles.lawActiveTabText]}>
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Content */}
             <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
               {contentMap[activeSection]
                 ? renderCaseText(contentMap[activeSection])
@@ -215,12 +311,15 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
   const savedReports  = useSelector((state) => state.reports.savedReports);
   const { analysisResult } = route.params;
 
-  const [activeTab, setActiveTab]               = useState('summary');
-  const [modalVisible, setModalVisible]         = useState(false);
-  const [selectedCase, setSelectedCase]         = useState(null);
-  const [caseDetailLoading, setCaseDetailLoading] = useState(false);
-  const [saving, setSaving]                     = useState(false);
-  const [downloading, setDownloading]           = useState(false);
+  const [activeTab, setActiveTab]                   = useState('summary');
+  const [modalVisible, setModalVisible]             = useState(false);
+  const [selectedCase, setSelectedCase]             = useState(null);
+  const [caseDetailLoading, setCaseDetailLoading]   = useState(false);
+  const [lawModalVisible, setLawModalVisible]       = useState(false);
+  const [selectedLaw, setSelectedLaw]               = useState(null);
+  const [lawDetailLoading, setLawDetailLoading]     = useState(false);
+  const [saving, setSaving]                         = useState(false);
+  const [downloading, setDownloading]               = useState(false);
 
   const isAlreadySaved = savedReports.some(
     (r) => r.analysis_id === analysisResult?.analysis_id
@@ -285,15 +384,13 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
         fileName:  `JuriAid_Report_${analysis_id || Date.now()}`,
         directory: Platform.OS === 'ios' ? 'Documents' : 'Download',
       });
-
       log.info('[CaseAnalysisResultScreen] PDF generated:', file?.filePath);
-
       if (file?.filePath) {
         Alert.alert(
           '📥 PDF Downloaded',
           `Saved to:\n${file.filePath}`,
           [
-            { text: 'Open',   onPress: () => FileViewer?.open(file.filePath).catch(() => {}) },
+            { text: 'Open', onPress: () => FileViewer?.open(file.filePath).catch(() => {}) },
             { text: 'OK' },
           ]
         );
@@ -321,6 +418,28 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
       setModalVisible(false);
     } finally {
       setCaseDetailLoading(false);
+    }
+  };
+
+  // ── Open Law Detail Modal ────────────────────────────────────────────────
+  const handleLawPress = async (lawItem) => {
+    if (!lawItem.case_id) {
+      Alert.alert('Not Available', 'No ID available for this law entry.');
+      return;
+    }
+    log.info('[CaseAnalysisResultScreen] law pressed', { case_id: lawItem.case_id });
+    setSelectedLaw({ case_name: lawItem.case_name });
+    setLawModalVisible(true);
+    setLawDetailLoading(true);
+    try {
+      const detail = await lawStatKGService.getCaseLawById(lawItem.case_id);
+      setSelectedLaw(detail);
+    } catch (error) {
+      log.error('[CaseAnalysisResultScreen] law detail failed:', error);
+      Alert.alert('Error', 'Failed to load law details.');
+      setLawModalVisible(false);
+    } finally {
+      setLawDetailLoading(false);
     }
   };
 
@@ -381,19 +500,20 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
         <ExpandableCard key={`${law.case_id}-${idx}`}>
           {(expanded) => (
             <>
-              <View style={styles.caseCardTitleRow}>
-                <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
-                  {sectionLabel}
-                </Text>
-                <View style={styles.badge}>
-                  <Text style={[styles.badgeText, { color: '#92400E' }]}>
-                    {relevancePct}%
+              <TouchableOpacity onPress={() => handleLawPress(law)} style={styles.caseCardHeader} activeOpacity={0.7}>
+                <View style={styles.caseCardTitleRow}>
+                  <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
+                    {sectionLabel}
                   </Text>
+                  <View style={styles.badge}>
+                    <Text style={[styles.badgeText, { color: '#92400E' }]}>{relevancePct}%</Text>
+                  </View>
                 </View>
-              </View>
-              {law.section_number ? (
-                <Text style={styles.actTitle}>{law.case_name}</Text>
-              ) : null}
+                {law.section_number ? (
+                  <Text style={styles.actTitle}>{law.case_name}</Text>
+                ) : null}
+                <Text style={styles.tapHint}>👆 Tap to view full law detail</Text>
+              </TouchableOpacity>
               <Text style={styles.actId}>{topicLabel}{citationLabel}</Text>
               {principleText ? (
                 <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 3}>{principleText}</Text>
@@ -462,7 +582,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
         {renderTabContent()}
       </ScrollView>
 
-      {/* ── Save & Download Buttons ── */}
+      {/* Save & Download */}
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={[styles.saveBtn, isAlreadySaved && styles.savedBtn, saving && styles.disabledBtn]}
@@ -493,6 +613,14 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
         caseData={selectedCase}
         loading={caseDetailLoading}
         onClose={() => { setModalVisible(false); setSelectedCase(null); }}
+      />
+
+      {/* Law Detail Modal */}
+      <LawDetailModal
+        visible={lawModalVisible}
+        lawData={selectedLaw}
+        loading={lawDetailLoading}
+        onClose={() => { setLawModalVisible(false); setSelectedLaw(null); }}
       />
     </View>
   );
@@ -555,12 +683,8 @@ const styles = StyleSheet.create({
 
   // ── Bottom Action Buttons ──
   actionRow: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 10,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    flexDirection: 'row', padding: 12, gap: 10,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E2E8F0',
   },
   saveBtn:          { flex: 1, backgroundColor: '#005A9C', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   savedBtn:         { backgroundColor: '#22C55E' },
@@ -568,7 +692,7 @@ const styles = StyleSheet.create({
   disabledBtn:      { opacity: 0.6 },
   actionBtnText:    { color: '#fff', fontSize: 14, fontWeight: '700' },
 
-  // ── Modal ──
+  // ── Modal (shared) ──
   modalContainer:   { flex: 1, backgroundColor: '#F8FAFC' },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -581,15 +705,31 @@ const styles = StyleSheet.create({
   modalLoading:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalLoadingText: { marginTop: 12, color: '#64748B', fontSize: 14 },
 
-  // Modal section tabs
-  modalTabBar:      { backgroundColor: '#fff', maxHeight: 48, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  modalTab:         { paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  modalActiveTab:   { borderBottomColor: '#005A9C' },
-  modalTabText:     { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  modalTabBar:        { backgroundColor: '#fff', maxHeight: 48, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  modalTab:           { paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  modalActiveTab:     { borderBottomColor: '#005A9C' },
+  modalTabText:       { fontSize: 13, color: '#64748B', fontWeight: '500' },
   modalActiveTabText: { color: '#005A9C', fontWeight: '700' },
+
+  // Law active tab (green)
+  lawActiveTab:     { borderBottomColor: '#065F46' },
+  lawActiveTabText: { color: '#065F46', fontWeight: '700' },
 
   modalBody:        { flex: 1 },
   modalContent:     { padding: 16, paddingBottom: 40 },
+
+  // ── Law meta bar ──
+  lawMetaBar: {
+    backgroundColor: '#ECFDF5', borderBottomWidth: 1, borderBottomColor: '#A7F3D0',
+    padding: 12,
+  },
+  lawMetaItem:  { fontSize: 12, color: '#374151', marginBottom: 3, lineHeight: 18 },
+  lawMetaLabel: { fontWeight: '700', color: '#065F46' },
+
+  // Chips for relevant_sections
+  chipRow:  { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6, gap: 6 },
+  chip:     { backgroundColor: '#D1FAE5', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  chipText: { fontSize: 11, color: '#065F46', fontWeight: '600' },
 
   // Case text formatting
   caseParaRow:  { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-start' },
@@ -599,9 +739,9 @@ const styles = StyleSheet.create({
   caseBodyText: { fontSize: 14, color: '#374151', lineHeight: 22, marginBottom: 8 },
 
   // kept for backwards compat
-  modalSection:     { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
-  modalSectionTitle:{ fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 10 },
-  modalBodyText:    { fontSize: 14, color: '#374151', lineHeight: 22 },
+  modalSection:      { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  modalSectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 10 },
+  modalBodyText:     { fontSize: 14, color: '#374151', lineHeight: 22 },
 });
 
 export default CaseAnalysisResultScreen;
