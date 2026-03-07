@@ -38,6 +38,35 @@ const renderFormattedText = (text) => {
   });
 };
 
+// ─── Case text renderer (numbered paragraphs + sub-items) ─────────────────
+const renderCaseText = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n').filter((l) => l.trim() !== '');
+  return lines.map((line, i) => {
+    const numberedMatch = line.match(/^(\d+\.[\u200b\t ]?)\s*(.*)/);
+    const subItemMatch  = line.match(/^([a-d]\))\s*(.*)/);
+    if (numberedMatch) {
+      return (
+        <View key={i} style={styles.caseParaRow}>
+          <Text style={styles.caseParaNum}>{numberedMatch[1].trim()}</Text>
+          <Text style={styles.caseParaText}>{numberedMatch[2]}</Text>
+        </View>
+      );
+    }
+    if (subItemMatch) {
+      return (
+        <View key={i} style={styles.caseSubRow}>
+          <Text style={styles.caseParaNum}>{subItemMatch[1]}</Text>
+          <Text style={styles.caseParaText}>{subItemMatch[2]}</Text>
+        </View>
+      );
+    }
+    return (
+      <Text key={i} style={styles.caseBodyText}>{line}</Text>
+    );
+  });
+};
+
 const cleanText = (text) => text ? text.replace(/\[Page \d+\]/g, '').trim() : text;
 
 const ScoreBadge = ({ score }) => {
@@ -64,47 +93,76 @@ const ExpandableCard = ({ children }) => {
   );
 };
 
-const CaseDetailModal = ({ visible, caseData, loading, onClose }) => (
-  <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-    <View style={styles.modalContainer}>
-      <View style={styles.modalHeader}>
-        <Text style={styles.modalTitle} numberOfLines={2}>
-          {caseData?.case_name || 'Case Details'}
-        </Text>
-        <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
-          <Text style={styles.modalCloseText}>✕ Close</Text>
-        </TouchableOpacity>
-      </View>
-      {loading ? (
-        <View style={styles.modalLoading}>
-          <ActivityIndicator size="large" color="#005A9C" />
-          <Text style={styles.modalLoadingText}>Loading case details…</Text>
+// ─── Case Detail Modal with tabs ──────────────────────────────────────────
+const CaseDetailModal = ({ visible, caseData, loading, onClose }) => {
+  const [activeSection, setActiveSection] = useState('judgment');
+
+  const sections = [
+    caseData?.judgment || caseData?.judgment_preview ? { key: 'judgment',  label: '⚖️ Judgment'  } : null,
+    caseData?.complaint                               ? { key: 'complaint', label: '📋 Complaint' } : null,
+    caseData?.defense                                 ? { key: 'defense',   label: '🛡 Defense'   } : null,
+  ].filter(Boolean);
+
+  const contentMap = {
+    judgment:  cleanText(caseData?.judgment || caseData?.judgment_preview),
+    complaint: cleanText(caseData?.complaint),
+    defense:   cleanText(caseData?.defense),
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalContainer}>
+        {/* Modal Header */}
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle} numberOfLines={2}>
+            {caseData?.case_name || 'Case Details'}
+          </Text>
+          <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
+            <Text style={styles.modalCloseText}>✕ Close</Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
-          {(caseData?.judgment || caseData?.judgment_preview) && (
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>⚖️ Judgment</Text>
-              <Text style={styles.modalBodyText}>{cleanText(caseData.judgment || caseData.judgment_preview)}</Text>
-            </View>
-          )}
-          {caseData?.complaint && (
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>📋 Complaint</Text>
-              <Text style={styles.modalBodyText}>{cleanText(caseData.complaint)}</Text>
-            </View>
-          )}
-          {caseData?.defense && (
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>🛡 Defense</Text>
-              <Text style={styles.modalBodyText}>{cleanText(caseData.defense)}</Text>
-            </View>
-          )}
-        </ScrollView>
-      )}
-    </View>
-  </Modal>
-);
+
+        {loading ? (
+          <View style={styles.modalLoading}>
+            <ActivityIndicator size="large" color="#005A9C" />
+            <Text style={styles.modalLoadingText}>Loading case details…</Text>
+          </View>
+        ) : (
+          <>
+            {/* Section Tabs */}
+            {sections.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.modalTabBar}
+              >
+                {sections.map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[styles.modalTab, activeSection === s.key && styles.modalActiveTab]}
+                    onPress={() => setActiveSection(s.key)}
+                  >
+                    <Text style={[styles.modalTabText, activeSection === s.key && styles.modalActiveTabText]}>
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Section Content */}
+            <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+              {contentMap[activeSection]
+                ? renderCaseText(contentMap[activeSection])
+                : <Text style={styles.emptyText}>No content available.</Text>
+              }
+            </ScrollView>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+};
 
 // ─── Build HTML for PDF ────────────────────────────────────────────────────
 const buildReportHTML = (result) => {
@@ -271,7 +329,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
     { key: 'summary',   label: '📋 Summary' },
     { key: 'cases',     label: `📂 Cases (${similar_cases.length})` },
     { key: 'laws',      label: `⚖️ Laws (${relevant_laws.length})` },
-    { key: 'questions', label: `❓ Questions ${Array.isArray(generated_questions) ? `(${generated_questions.length})` : '✓'}` },
+    { key: 'questions', label: `❓ F&A ${Array.isArray(generated_questions) ? `(${generated_questions.length})` : '✓'}` },
   ];
 
   const renderSummary = () => (
@@ -351,7 +409,6 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
     if (!generated_questions || generated_questions.length === 0)
       return <Text style={styles.emptyText}>No questions generated.</Text>;
 
-    // Backend sometimes returns a plain string instead of an array
     if (typeof generated_questions === 'string') {
       return <View style={styles.summaryCard}>{renderFormattedText(generated_questions)}</View>;
     }
@@ -513,14 +570,35 @@ const styles = StyleSheet.create({
 
   // ── Modal ──
   modalContainer:   { flex: 1, backgroundColor: '#F8FAFC' },
-  modalHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  modalTitle:       { fontSize: 15, fontWeight: 'bold', color: '#1E293B', flex: 1, marginRight: 8 },
-  modalCloseBtn:    { padding: 6 },
-  modalCloseText:   { color: '#DC2626', fontSize: 14, fontWeight: '600' },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12,
+    backgroundColor: '#005A9C', borderBottomWidth: 1, borderBottomColor: '#004080',
+  },
+  modalTitle:       { fontSize: 15, fontWeight: 'bold', color: '#fff', flex: 1, marginRight: 8 },
+  modalCloseBtn:    { padding: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8 },
+  modalCloseText:   { color: '#fff', fontSize: 13, fontWeight: '600' },
   modalLoading:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalLoadingText: { marginTop: 12, color: '#64748B', fontSize: 14 },
+
+  // Modal section tabs
+  modalTabBar:      { backgroundColor: '#fff', maxHeight: 48, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  modalTab:         { paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  modalActiveTab:   { borderBottomColor: '#005A9C' },
+  modalTabText:     { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  modalActiveTabText: { color: '#005A9C', fontWeight: '700' },
+
   modalBody:        { flex: 1 },
   modalContent:     { padding: 16, paddingBottom: 40 },
+
+  // Case text formatting
+  caseParaRow:  { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-start' },
+  caseSubRow:   { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-start', marginLeft: 20 },
+  caseParaNum:  { fontSize: 13, fontWeight: '700', color: '#005A9C', minWidth: 28, marginTop: 1 },
+  caseParaText: { fontSize: 14, color: '#374151', lineHeight: 22, flex: 1 },
+  caseBodyText: { fontSize: 14, color: '#374151', lineHeight: 22, marginBottom: 8 },
+
+  // kept for backwards compat
   modalSection:     { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
   modalSectionTitle:{ fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 10 },
   modalBodyText:    { fontSize: 14, color: '#374151', lineHeight: 22 },
