@@ -38,6 +38,8 @@ const renderFormattedText = (text) => {
   });
 };
 
+const cleanText = (text) => text ? text.replace(/\[Page \d+\]/g, '').trim() : text;
+
 const ScoreBadge = ({ score }) => {
   const pct   = Math.round((score || 0) * 100);
   const color = pct >= 60 ? '#16A34A' : pct >= 40 ? '#D97706' : '#DC2626';
@@ -83,19 +85,19 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => (
           {(caseData?.judgment || caseData?.judgment_preview) && (
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>⚖️ Judgment</Text>
-              <Text style={styles.modalBodyText}>{caseData.judgment || caseData.judgment_preview}</Text>
+              <Text style={styles.modalBodyText}>{cleanText(caseData.judgment || caseData.judgment_preview)}</Text>
             </View>
           )}
           {caseData?.complaint && (
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>📋 Complaint</Text>
-              <Text style={styles.modalBodyText}>{caseData.complaint}</Text>
+              <Text style={styles.modalBodyText}>{cleanText(caseData.complaint)}</Text>
             </View>
           )}
           {caseData?.defense && (
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>🛡 Defense</Text>
-              <Text style={styles.modalBodyText}>{caseData.defense}</Text>
+              <Text style={styles.modalBodyText}>{cleanText(caseData.defense)}</Text>
             </View>
           )}
         </ScrollView>
@@ -110,7 +112,7 @@ const buildReportHTML = (result) => {
     <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:6px;">
       <b>${c.case_name || ''}</b><br/>
       <span style="color:#16A34A;">${Math.round((c.score||0)*100)}% match</span><br/>
-      <span>${c.summary || ''}</span>
+      <span>${c.judgment_preview || ''}</span>
     </div>`).join('');
 
   const lawsHTML = (result.relevant_laws || []).map((l) => `
@@ -121,7 +123,9 @@ const buildReportHTML = (result) => {
       <span>${(l.principle || []).join(' ')}</span>
     </div>`).join('');
 
-  const questionsHTML = (result.generated_questions || []).map((q) => `
+  const questionsHTML = typeof result.generated_questions === 'string'
+    ? `<p>${result.generated_questions.replace(/\n/g, '<br/>')}</p>`
+    : (result.generated_questions || []).map((q) => `
     <div style="margin-bottom:8px;padding:8px;background:#f5f5f5;border-radius:6px;">
       <b>Q${q.question_id}:</b> ${q.question || ''}
     </div>`).join('');
@@ -142,7 +146,7 @@ const buildReportHTML = (result) => {
     ${casesHTML || '<p>None</p>'}
     <h2>Relevant Laws (${(result.relevant_laws||[]).length})</h2>
     ${lawsHTML || '<p>None</p>'}
-    <h2>Generated Questions (${(result.generated_questions||[]).length})</h2>
+    <h2>Generated Questions</h2>
     ${questionsHTML || '<p>None</p>'}
   </body></html>`;
 };
@@ -297,7 +301,6 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
               <Text style={styles.tapHint}>👆 Tap title to view full case</Text>
             </TouchableOpacity>
             <Text style={styles.cardReason}>{c.reason}</Text>
-            {/* <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 4}>{c.judgment_preview}</Text> */}
           </>
         )}
       </ExpandableCard>
