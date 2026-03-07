@@ -80,6 +80,12 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => (
         </View>
       ) : (
         <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalContent}>
+          {(caseData?.judgment || caseData?.judgment_preview) && (
+            <View style={styles.modalSection}>
+              <Text style={styles.modalSectionTitle}>⚖️ Judgment</Text>
+              <Text style={styles.modalBodyText}>{caseData.judgment || caseData.judgment_preview}</Text>
+            </View>
+          )}
           {caseData?.complaint && (
             <View style={styles.modalSection}>
               <Text style={styles.modalSectionTitle}>📋 Complaint</Text>
@@ -109,9 +115,10 @@ const buildReportHTML = (result) => {
 
   const lawsHTML = (result.relevant_laws || []).map((l) => `
     <div style="margin-bottom:10px;padding:10px;border:1px solid #ddd;border-radius:6px;">
-      <b>${l.title || l.act_id || ''}</b><br/>
-      <span>Section ${l.section || ''}: ${l.section_title || ''}</span><br/>
-      <span>${l.content || ''}</span>
+      <b>${l.case_name || ''}</b><br/>
+      ${l.citation ? `<span style="color:#555;">${l.citation}</span><br/>` : ''}
+      ${l.section_number ? `<span>Section ${l.section_number}${l.section_title ? ': ' + l.section_title : ''}</span><br/>` : ''}
+      <span>${(l.principle || []).join(' ')}</span>
     </div>`).join('');
 
   const questionsHTML = (result.generated_questions || []).map((q) => `
@@ -260,7 +267,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
     { key: 'summary',   label: '📋 Summary' },
     { key: 'cases',     label: `📂 Cases (${similar_cases.length})` },
     { key: 'laws',      label: `⚖️ Laws (${relevant_laws.length})` },
-    { key: 'questions', label: `❓ Q&A (${generated_questions.length})` },
+    { key: 'questions', label: `❓ Questions ${Array.isArray(generated_questions) ? `(${generated_questions.length})` : '✓'}` },
   ];
 
   const renderSummary = () => (
@@ -290,7 +297,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
               <Text style={styles.tapHint}>👆 Tap title to view full case</Text>
             </TouchableOpacity>
             <Text style={styles.cardReason}>{c.reason}</Text>
-            <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 4}>{c.summary}</Text>
+            {/* <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 4}>{c.judgment_preview}</Text> */}
           </>
         )}
       </ExpandableCard>
@@ -300,34 +307,52 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
   const renderRelevantLaws = () => {
     if (relevant_laws.length === 0)
       return <Text style={styles.emptyText}>No relevant laws found.</Text>;
-    return relevant_laws.map((law, idx) => (
-      <ExpandableCard key={`${law.act_id}-${idx}`}>
-        {(expanded) => (
-          <>
-            <View style={styles.caseCardTitleRow}>
-              <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
-                Section {law.section}: {law.section_title}
-              </Text>
-              <View style={styles.badge}>
-                <Text style={[styles.badgeText, { color: '#92400E' }]}>
-                  {Math.round((law.relevance_score || 0) * 100)}%
+    return relevant_laws.map((law, idx) => {
+      const principleText = (law.principle || []).join('\n\n');
+      const sectionLabel  = law.section_number
+        ? `Section ${law.section_number}${law.section_title ? ': ' + law.section_title : ''}`
+        : law.case_name;
+      const relevancePct  = Math.round(Math.min(law.support_score || 0, 1.0) * 100);
+      const topicLabel    = law.topic ? law.topic.replace(/_/g, ' ') : '';
+      const citationLabel = law.citation ? `  •  ${law.citation}` : '';
+
+      return (
+        <ExpandableCard key={`${law.case_id}-${idx}`}>
+          {(expanded) => (
+            <>
+              <View style={styles.caseCardTitleRow}>
+                <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
+                  {sectionLabel}
                 </Text>
+                <View style={styles.badge}>
+                  <Text style={[styles.badgeText, { color: '#92400E' }]}>
+                    {relevancePct}%
+                  </Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.actTitle}>{law.title}</Text>
-            <Text style={styles.actId}>Act: {law.act_id}</Text>
-            {law.content && (
-              <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 3}>{law.content}</Text>
-            )}
-          </>
-        )}
-      </ExpandableCard>
-    ));
+              {law.section_number ? (
+                <Text style={styles.actTitle}>{law.case_name}</Text>
+              ) : null}
+              <Text style={styles.actId}>{topicLabel}{citationLabel}</Text>
+              {principleText ? (
+                <Text style={styles.cardBody} numberOfLines={expanded ? 0 : 3}>{principleText}</Text>
+              ) : null}
+            </>
+          )}
+        </ExpandableCard>
+      );
+    });
   };
 
   const renderQuestions = () => {
-    if (generated_questions.length === 0)
+    if (!generated_questions || generated_questions.length === 0)
       return <Text style={styles.emptyText}>No questions generated.</Text>;
+
+    // Backend sometimes returns a plain string instead of an array
+    if (typeof generated_questions === 'string') {
+      return <View style={styles.summaryCard}>{renderFormattedText(generated_questions)}</View>;
+    }
+
     return generated_questions.map((q, idx) => (
       <View key={q.question_id || idx} style={styles.questionCard}>
         <Text style={styles.questionNumber}>Q{q.question_id ?? idx + 1}</Text>
