@@ -8,12 +8,15 @@ import { saveReport } from '../../redux/slices/reportsSlice';
 import { log } from '../../api/index';
 import pastCaseService from '../../api/pastcase';
 import lawStatKGService from '../../api/lawstatkg';
+import reportsAPI from '../../api/reports';
 
 // ── PDF packages (safe import) ─────────────────────────────────────────────
 let RNHTMLtoPDF = null;
 let FileViewer  = null;
+let RNFS = null;
 try { RNHTMLtoPDF = require('react-native-html-to-pdf').default; } catch (e) { log.warn('[CaseAnalysisResultScreen] react-native-html-to-pdf not installed'); }
 try { FileViewer  = require('react-native-file-viewer').default; } catch (e) { log.warn('[CaseAnalysisResultScreen] react-native-file-viewer not installed'); }
+try { RNFS = require('react-native-fs'); } catch (e) { log.warn('[CaseAnalysisResultScreen] react-native-fs not installed'); }
 
 // ─── Markdown renderer (## header, **bold**) ──────────────────────────────
 const renderFormattedText = (text) => {
@@ -352,19 +355,22 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
   } = analysisResult;
 
   // ── Save Report ─────────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isAlreadySaved) {
       Alert.alert('Already Saved', 'This report is already in your Reports tab.');
       return;
     }
     setSaving(true);
     try {
+      // Save to backend first
+      await reportsAPI.saveReport(analysisResult);
+      // Then update Redux
       dispatch(saveReport(analysisResult));
-      log.info('[CaseAnalysisResultScreen] report saved', { analysis_id });
+      log.info('[CaseAnalysisResultScreen] report saved to backend & Redux', { analysis_id });
       Alert.alert('Saved ✅', 'Report saved to your Reports tab.');
     } catch (e) {
       log.error('[CaseAnalysisResultScreen] save failed:', e);
-      Alert.alert('Error', 'Failed to save report.');
+      Alert.alert('Error', 'Failed to save report. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -372,63 +378,138 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
 
   // ── Download PDF ─────────────────────────────────────────────────────────
   const handleDownload = async () => {
-    if (!RNHTMLtoPDF) {
-      Alert.alert('Not Available', 'react-native-html-to-pdf is not linked. Please rebuild the app.');
+    if (!RNFS) {
+      Alert.alert('Not Available', 'react-native-fs is not installed. Please contact support.');
       return;
     }
 
-    // Request storage permission on Android < 10 (API < 29)
-    if (Platform.OS === 'android' && Platform.Version < 29) {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title:         'Storage Permission',
-          message:       'JuriAid needs storage access to save PDF reports.',
-          buttonPositive: 'Allow',
-          buttonNegative: 'Deny',
+    // Request permission for Android
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Permission',
+            message: 'JuriAid needs permission to save reports to your Downloads folder.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          }
+        );
+        
+        // On Android 10+, permission might be denied but we can still write to Downloads
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          log.warn('[CaseAnalysisResultScreen] Storage permission denied, trying anyway for Android 10+');
         }
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        Alert.alert('Permission Denied', 'Storage permission is required to download reports.');
-        return;
+      } catch (err) {
+        log.warn('[CaseAnalysisResultScreen] Permission error:', err);
       }
     }
 
     setDownloading(true);
-    log.info('[CaseAnalysisResultScreen] generating PDF…', { analysis_id });
+    log.info('[CaseAnalysisResultScreen] generating text report…', { analysis_id });
+    
     try {
-      const file = await RNHTMLtoPDF.convert({
-        html:     buildReportHTML(analysisResult),
-        fileName: `JuriAid_Report_${analysis_id || Date.now()}`,
-        // No 'directory' — uses app's default files dir which is always writable
-      });
-
-      log.info('[CaseAnalysisResultScreen] PDF result:', file);
-
-      if (file?.filePath) {
-        Alert.alert(
-          '📥 PDF Ready',
-          `Saved to:\n${file.filePath}`,
-          [
-            {
-              text: 'Open',
-              onPress: () =>
-                FileViewer
-                  ? FileViewer.open(file.filePath).catch((e) => {
-                      log.error('[CaseAnalysisResultScreen] FileViewer error:', e);
-                      Alert.alert('Cannot Open', 'Use a file manager to open:\n' + file.filePath);
-                    })
-                  : Alert.alert('File Location', file.filePath),
-            },
-            { text: 'OK' },
-          ]
-        );
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const fileName = `JuriAid_Report_${timestamp}.txt`;
+      
+      // Determine save location
+      let downloadPath;
+      if (Platform.OS === 'ios') {
+        downloadPath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
       } else {
-        Alert.alert('Download Issue', 'PDF was generated but the file path is unavailable.');
+        // Android: try external Downloads first, fallback to internal
+        const downloadsDir = RNFS.DownloadDirectoryPath || RNFS.ExternalStorageDirectoryPath + '/Download';
+        downloadPath = `${downloadsDir}/${fileName}`;
       }
+
+      // Build text report
+      const reportText = `
+═══════════════════════════════════════════════════════════════════
+               ⚖️  JuriAid – Case Analysis Report
+═══════════════════════════════════════════════════════════════════
+
+Analysis ID: ${analysis_id || 'N/A'}
+Generated: ${new Date().toLocaleString()}
+File: ${metadata?.filename || 'N/A'}
+Processing Time: ${processing_time_seconds?.toFixed(1) || 'N/A'} seconds
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 CASE SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${case_summary || 'No summary available'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📂 SIMILAR CASES (${similar_cases.length})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${similar_cases.map((c, i) => `
+${i + 1}. ${c.case_name || 'Unknown Case'}
+   Match Score: ${Math.round((c.score || 0) * 100)}%
+   Reason: ${c.reason || 'N/A'}
+   Preview: ${c.judgment_preview || 'N/A'}
+`).join('\n') || 'None'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚖️  RELEVANT LAWS (${relevant_laws.length})
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${relevant_laws.map((law, i) => `
+${i + 1}. ${law.case_name || law.citation || 'Unknown Law'}
+   ${law.citation ? `Citation: ${law.citation}` : ''}
+   ${law.section_number ? `Section: ${law.section_number}` : ''}
+   ${law.section_title ? `Title: ${law.section_title}` : ''}
+   Confidence: ${Math.round((law.confidence_score || 0) * 100)}%
+   Principle: ${(law.principle || []).join(' ') || 'N/A'}
+`).join('\n') || 'None'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❓ GENERATED QUESTIONS & ANSWERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${typeof generated_questions === 'string' 
+  ? generated_questions 
+  : (generated_questions || []).map((q, i) => `
+Q${q.question_id || i + 1}: ${q.question || 'N/A'}
+`).join('\n') || 'None'}
+
+═══════════════════════════════════════════════════════════════════
+                    End of Report
+═══════════════════════════════════════════════════════════════════
+`;
+
+      await RNFS.writeFile(downloadPath, reportText, 'utf8');
+      log.info('[CaseAnalysisResultScreen] Report saved to:', downloadPath);
+
+      Alert.alert(
+        '✅ Report Downloaded',
+        Platform.OS === 'android' 
+          ? `Saved to Downloads folder as:\n${fileName}`
+          : `Saved to Documents folder as:\n${fileName}`,
+        [
+          {
+            text: 'Preview',
+            onPress: () => {
+              // Try to open with default text viewer
+              const Linking = require('react-native').Linking;
+              Linking.openURL(`file://${downloadPath}`)
+                .catch((err) => {
+                  log.error('[CaseAnalysisResultScreen] Failed to open file:', err);
+                  Alert.alert(
+                    'File Location', 
+                    Platform.OS === 'android'
+                      ? `Check your Downloads folder:\n${fileName}`
+                      : `File saved successfully:\n${fileName}`
+                  );
+                });
+            }
+          },
+          { text: 'OK' }
+        ]
+      );
     } catch (e) {
-      log.error('[CaseAnalysisResultScreen] PDF generation failed:', e);
-      Alert.alert('Download Failed', `Could not generate PDF.\n\n${e?.message || String(e)}`);
+      log.error('[CaseAnalysisResultScreen] Download failed:', e);
+      Alert.alert('Download Failed', `Could not save report.\n\n${e?.message || String(e)}`);
     } finally {
       setDownloading(false);
     }
@@ -522,7 +603,7 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
       return <Text style={styles.emptyText}>No relevant laws found.</Text>;
     return relevant_laws.map((law, idx) => {
       const principleText = (law.principle || []).join('\n\n');
-      const relevancePct  = Math.round(Math.min(law.support_score || 0, 1.0) * 100);
+      const relevancePct  = Math.round(Math.min(law.confidence_score || 0, 1.0) * 100);
       const topicLabel    = law.topic ? law.topic.replace(/_/g, ' ') : '';
       const sectionLabel  = law.section_number
         ? `Section ${law.section_number}${law.section_title ? ': ' + law.section_title : ''}`
@@ -539,9 +620,9 @@ const CaseAnalysisResultScreen = ({ route, navigation }) => {
                   <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
                     {lawLabel(law.case_name, law.citation)}
                   </Text>
-                  {/* <View style={styles.badge}>
+                  <View style={styles.badge}>
                     <Text style={[styles.badgeText, { color: '#92400E' }]}>{relevancePct}%</Text>
-                  </View> */}
+                  </View>
                 </View>
                 <Text style={styles.tapHint}>👆 Tap to view full law detail</Text>
               </TouchableOpacity>

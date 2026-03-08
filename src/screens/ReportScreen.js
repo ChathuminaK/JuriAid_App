@@ -1,17 +1,39 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   FlatList, TouchableOpacity, Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { deleteReport } from '../redux/slices/reportsSlice';
+import { saveReport, deleteReport } from '../redux/slices/reportsSlice';
 import { log } from '../api/index';
+import reportsAPI from '../api/reports';
 
 const ReportScreen = ({ navigation }) => {
   const dispatch      = useDispatch();
   const savedReports  = useSelector((state) => state.reports.savedReports);
+  const token = useSelector((state) => state.auth.token);
 
   log.info('[ReportScreen] mounted, savedReports count:', savedReports.length);
+
+  // Load reports from backend on mount
+  useEffect(() => {
+    if (!token) return;
+    
+    reportsAPI.getReports()
+      .then((reports) => {
+        log.info('[ReportScreen] loaded reports from backend:', reports.length);
+        reports.forEach((r) => {
+          const alreadyIn = savedReports.some((s) => s.analysis_id === r.analysis_id);
+          if (!alreadyIn) {
+            dispatch(saveReport(r));
+          }
+        });
+      })
+      .catch((e) => {
+        log.warn('[ReportScreen] failed to load reports from backend:', e);
+        // Non-fatal: user can still see locally saved reports
+      });
+  }, [token, dispatch]);
 
   const handleDelete = (analysisId) => {
     Alert.alert(
@@ -22,9 +44,18 @@ const ReportScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            // Remove from Redux immediately
             dispatch(deleteReport(analysisId));
-            log.info('[ReportScreen] deleted report:', analysisId);
+            log.info('[ReportScreen] deleted report from Redux:', analysisId);
+            
+            // Try to delete from backend (non-blocking)
+            try {
+              await reportsAPI.deleteReport(analysisId);
+              log.info('[ReportScreen] deleted report from backend:', analysisId);
+            } catch (e) {
+              log.warn('[ReportScreen] backend delete failed (non-fatal):', e);
+            }
           },
         },
       ]
@@ -73,7 +104,7 @@ const ReportScreen = ({ navigation }) => {
             <Text style={styles.badgeText}>📜 {(item.relevant_laws || []).length} Laws</Text>
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>❓ {(item.generated_questions || []).length} Q&A</Text>
+            <Text style={styles.badgeText}>❓  Q&A</Text>
           </View>
         </View>
       </View>

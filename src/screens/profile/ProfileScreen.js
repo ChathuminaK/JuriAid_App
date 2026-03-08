@@ -68,55 +68,65 @@ const ProfileScreen = ({ navigation }) => {
           hasChevron: true,
           onPress: () => navigation.navigate('EditProfile'),
         },
+      ]
+    },
+    {
+      title: 'Preferences',
+      items: [
         { 
           icon: <Bell color="#005A9C" size={22} />, 
           title: 'Notifications', 
-          subtitle: 'Manage your notification preferences',
+          subtitle: notificationsEnabled ? 'Enabled' : 'Disabled',
           hasSwitch: true,
           switchValue: notificationsEnabled,
-          onSwitchChange: setNotificationsEnabled,
+          onSwitchChange: (value) => {
+            setNotificationsEnabled(value);
+            Alert.alert(
+              'Notifications', 
+              value ? 'Notifications enabled' : 'Notifications disabled'
+            );
+          },
         },
         { 
           icon: <Moon color="#005A9C" size={22} />, 
           title: 'Dark Mode', 
-          subtitle: 'Switch to dark theme',
+          subtitle: 'Coming soon',
           hasSwitch: true,
           switchValue: darkModeEnabled,
-          onSwitchChange: setDarkModeEnabled,
+          onSwitchChange: (value) => {
+            Alert.alert('Coming Soon', 'Dark mode will be available in the next update!');
+          },
         }
       ]
     },
     {
-      title: 'Security',
-      items: [
-        { 
-          icon: <Shield color="#005A9C" size={22} />, 
-          title: 'Privacy & Security', 
-          subtitle: 'Manage your privacy settings',
-          hasChevron: true,
-        },
-        { 
-          icon: <Settings color="#005A9C" size={22} />, 
-          title: 'Account Settings', 
-          subtitle: 'Password, security, and more',
-          hasChevron: true,
-        }
-      ]
-    },
-    {
-      title: 'Support',
+      title: 'About',
       items: [
         { 
           icon: <HelpCircle color="#005A9C" size={22} />, 
           title: 'Help & Support', 
-          subtitle: 'Get help and contact support',
+          subtitle: 'Get help and FAQs',
           hasChevron: true,
+          onPress: () => {
+            Alert.alert(
+              'Help & Support',
+              'For support, please contact:\n\nEmail: juriaidai@gmail.com\nPhone: +94 72 337 6887',
+              [{ text: 'OK' }]
+            );
+          },
         },
         { 
           icon: <Star color="#005A9C" size={22} />, 
-          title: 'Rate App', 
-          subtitle: 'Share your feedback with us',
+          title: 'About JuriAid', 
+          subtitle: 'Version 1.0.0',
           hasChevron: true,
+          onPress: () => {
+            Alert.alert(
+              'About JuriAid',
+              'JuriAid - Your AI-powered legal assistant for Sri Lankan divorce cases.\n\nVersion: 1.0.0\n\n© 2026 JuriAid. All rights reserved.',
+              [{ text: 'OK' }]
+            );
+          },
         }
       ]
     }

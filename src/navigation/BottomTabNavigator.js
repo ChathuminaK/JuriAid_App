@@ -210,13 +210,13 @@ const BottomTabNavigator = () => {
           tabBarLabel: 'Cases',
         }}
       />
-      {/* <Tab.Screen
+      <Tab.Screen
         name="Resources"
         component={LawsStackNavigator}
         options={{
           tabBarLabel: 'Resources',
         }}
-      /> */}
+      />
       <Tab.Screen
         name="Report"
         component={ReportScreen}
