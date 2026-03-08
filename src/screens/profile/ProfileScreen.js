@@ -70,48 +70,61 @@ const ProfileScreen = ({ navigation }) => {
         },
       ]
     },
-    {
-      title: 'Preferences',
-      items: [
-        { 
-          icon: <Bell color="#005A9C" size={22} />, 
-          title: 'Notifications', 
-          subtitle: notificationsEnabled ? 'Enabled' : 'Disabled',
-          hasSwitch: true,
-          switchValue: notificationsEnabled,
-          onSwitchChange: (value) => {
-            setNotificationsEnabled(value);
-            Alert.alert(
-              'Notifications', 
-              value ? 'Notifications enabled' : 'Notifications disabled'
-            );
-          },
-        },
-        { 
-          icon: <Moon color="#005A9C" size={22} />, 
-          title: 'Dark Mode', 
-          subtitle: 'Coming soon',
-          hasSwitch: true,
-          switchValue: darkModeEnabled,
-          onSwitchChange: (value) => {
-            Alert.alert('Coming Soon', 'Dark mode will be available in the next update!');
-          },
-        }
-      ]
-    },
+    // {
+    //   title: 'Preferences',
+    //   items: [
+    //     { 
+    //       icon: <Bell color="#005A9C" size={22} />, 
+    //       title: 'Notifications', 
+    //       subtitle: notificationsEnabled ? 'Enabled' : 'Disabled',
+    //       hasSwitch: true,
+    //       switchValue: notificationsEnabled,
+    //       onSwitchChange: (value) => {
+    //         setNotificationsEnabled(value);
+    //         Alert.alert(
+    //           'Notifications', 
+    //           value ? 'Notifications enabled' : 'Notifications disabled'
+    //         );
+    //       },
+    //     },
+    //     { 
+    //       icon: <Moon color="#005A9C" size={22} />, 
+    //       title: 'Dark Mode', 
+    //       subtitle: 'Coming soon',
+    //       hasSwitch: true,
+    //       switchValue: darkModeEnabled,
+    //       onSwitchChange: (value) => {
+    //         Alert.alert('Coming Soon', 'Dark mode will be available in the next update!');
+    //       },
+    //     }
+    //   ]
+    // },
     {
       title: 'About',
       items: [
         { 
           icon: <HelpCircle color="#005A9C" size={22} />, 
           title: 'Help & Support', 
-          subtitle: 'Get help and FAQs',
+          subtitle: 'Get help and contact us',
           hasChevron: true,
           onPress: () => {
+            const { Linking } = require('react-native');
             Alert.alert(
               'Help & Support',
-              'For support, please contact:\n\nEmail: juriaidai@gmail.com\nPhone: +94 72 337 6887',
-              [{ text: 'OK' }]
+              'How would you like to contact us?',
+              [
+                {
+                  text: 'Email',
+                  onPress: () => Linking.openURL('mailto:juriaidai@gmail.com')
+                    .catch(() => Alert.alert('Error', 'Cannot open email app'))
+                },
+                {
+                  text: 'Call',
+                  onPress: () => Linking.openURL('tel:+94723376887')
+                    .catch(() => Alert.alert('Error', 'Cannot make phone calls'))
+                },
+                { text: 'Cancel', style: 'cancel' }
+              ]
             );
           },
         },

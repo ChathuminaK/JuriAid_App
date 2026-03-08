@@ -168,7 +168,7 @@ const HomeScreen = ({ navigation }) => {
       icon: <Search color="#005A9C" size={28} />,
       backgroundColor: '#F1F5F9',
       textColor: '#005A9C',
-      action: () => navigation?.navigate('Resources')
+      action: () => navigation?.navigate('Laws')
     },
     {
       title: 'Search Past Case',

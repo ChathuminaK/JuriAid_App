@@ -104,7 +104,7 @@ const ReportScreen = ({ navigation }) => {
             <Text style={styles.badgeText}>📜 {(item.relevant_laws || []).length} Laws</Text>
           </View>
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>❓  Q&A</Text>
+            <Text style={styles.badgeText}>❓  F&A</Text>
           </View>
         </View>
       </View>

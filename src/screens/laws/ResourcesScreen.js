@@ -1,74 +1,87 @@
 import React from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  Linking,
+  View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
+  ScrollView, Alert, Linking,
 } from 'react-native';
-import { BookOpen, ExternalLink, FileText, Globe } from 'lucide-react-native';
+import { Globe, ExternalLink } from 'lucide-react-native';
+
+const resources = [
+  {
+    id: '1',
+    title: 'CommonLII - Sri Lanka',
+    description: 'Free access to Sri Lankan legal materials and case law',
+    url: 'http://www.commonlii.org/lk/',
+    color: '#1D4ED8',
+  },
+  {
+    id: '2',
+    title: 'Supreme Court of Sri Lanka',
+    description: 'Official Supreme Court judgments and information',
+    url: 'http://www.supremecourt.lk/',
+    color: '#065F46',
+  },
+  {
+    id: '3',
+    title: 'Parliament of Sri Lanka',
+    description: 'Acts, bills, and parliamentary documents',
+    url: 'https://www.parliament.lk/acts-of-parliament',
+    color: '#7C3AED',
+  },
+  {
+    id: '4',
+    title: 'Legal Aid Commission',
+    description: 'Free legal assistance and resources for Sri Lankans',
+    url: 'https://www.legalaid.gov.lk/',
+    color: '#B45309',
+  },
+];
 
 const ResourcesScreen = ({ navigation }) => {
-  const resources = [
-    {
-      title: 'Sri Lankan Legal Database',
-      url: 'http://www.commonlii.org/lk/',
-      icon: <Globe color="#005A9C" size={24} />,
-      description: 'Free Sri Lankan legal information',
-    },
-    {
-      title: 'Supreme Court of Sri Lanka',
-      url: 'https://www.supremecourt.lk/',
-      icon: <FileText color="#005A9C" size={24} />,
-      description: 'Official Supreme Court website',
-    },
-    {
-      title: 'Parliament of Sri Lanka',
-      url: 'https://www.parliament.lk/',
-      icon: <BookOpen color="#005A9C" size={24} />,
-      description: 'Acts and legislation',
-    },
-  ];
-
-  const handleOpenLink = (url) => {
-    Linking.openURL(url).catch((err) => {
-      Alert.alert('Error', 'Unable to open link');
-    });
+  const handleOpenLink = async (url) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', `Cannot open: ${url}`);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to open link');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <BookOpen color="#005A9C" size={28} />
-        <Text style={styles.headerTitle}>Legal Resources</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>External Legal Resources</Text>
+        <View style={{ width: 60 }} />
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.sectionTitle}>External Legal Resources</Text>
-        
-        {resources.map((resource, index) => (
+        <View style={styles.iconContainer}>
+          <Globe color="#1D4ED8" size={48} />
+        </View>
+        <Text style={styles.subtitle}>
+          Access trusted Sri Lankan legal databases and official resources
+        </Text>
+
+        {resources.map((item) => (
           <TouchableOpacity
-            key={index}
-            style={styles.resourceCard}
-            onPress={() => handleOpenLink(resource.url)}
+            key={item.id}
+            style={[styles.card, { borderLeftColor: item.color }]}
+            onPress={() => handleOpenLink(item.url)}
+            activeOpacity={0.75}
           >
-            <View style={styles.resourceIcon}>{resource.icon}</View>
-            <View style={styles.resourceContent}>
-              <Text style={styles.resourceTitle}>{resource.title}</Text>
-              <Text style={styles.resourceDescription}>{resource.description}</Text>
-              <Text style={styles.resourceUrl}>{resource.url}</Text>
+            <View style={styles.cardContent}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardDescription}>{item.description}</Text>
             </View>
-            <ExternalLink color="#64748B" size={20} />
+            <ExternalLink color={item.color} size={20} />
           </TouchableOpacity>
         ))}
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            These resources provide additional legal information for Sri Lankan law. JuriAid is not affiliated with these organizations.
-          </Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -79,74 +92,53 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
+    paddingBottom: 12,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    gap: 12,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E293B',
-  },
+  backBtn: { padding: 4 },
+  backText: { color: '#1D4ED8', fontSize: 15 },
+  headerTitle: { fontSize: 17, fontWeight: 'bold', color: '#1E293B' },
   content: { flex: 1 },
   contentContainer: { padding: 20 },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 16,
-  },
-  resourceCard: {
-    flexDirection: 'row',
+  iconContainer: {
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  card: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 12,
+    borderLeftWidth: 4,
+    elevation: 1,
   },
-  resourceIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EBF4FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resourceContent: { flex: 1 },
-  resourceTitle: {
+  cardContent: { flex: 1, marginRight: 12 },
+  cardTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1E293B',
     marginBottom: 4,
   },
-  resourceDescription: {
+  cardDescription: {
     fontSize: 13,
     color: '#64748B',
-    marginBottom: 4,
-  },
-  resourceUrl: {
-    fontSize: 11,
-    color: '#3B82F6',
-  },
-  infoBox: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#92400E',
-    lineHeight: 20,
+    lineHeight: 18,
   },
 });
 
