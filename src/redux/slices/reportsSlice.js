@@ -22,8 +22,17 @@ const reportsSlice = createSlice({
         (r) => r.analysis_id !== action.payload
       );
     },
+    clearReports: (state) => {
+      state.savedReports = [];
+    },
+  },
+  extraReducers: (builder) => {
+    // Clear all reports when any user logs out
+    builder.addCase('auth/logoutUser/fulfilled', (state) => {
+      state.savedReports = [];
+    });
   },
 });
 
-export const { saveReport, deleteReport } = reportsSlice.actions;
+export const { saveReport, deleteReport, clearReports } = reportsSlice.actions;
 export default reportsSlice.reducer;
