@@ -146,7 +146,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 return <Home color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
               case 'Cases':
                 return <Briefcase color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
-              case 'Resources':
+              case 'Laws':
                 return <BookOpen color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
               case 'Report':
                 return <FileText color={iconColor} size={iconSize} strokeWidth={isFocused ? 2.5 : 2} />;
@@ -210,13 +210,13 @@ const BottomTabNavigator = () => {
           tabBarLabel: 'Cases',
         }}
       />
-      {/* <Tab.Screen
-        name="Resources"
+      <Tab.Screen
+        name="Laws"
         component={LawsStackNavigator}
         options={{
-          tabBarLabel: 'Resources',
+          tabBarLabel: 'Laws',
         }}
-      /> */}
+      />
       <Tab.Screen
         name="Report"
         component={ReportScreen}
