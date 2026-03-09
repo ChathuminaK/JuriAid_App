@@ -38,6 +38,7 @@ const { width } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const user = useSelector(selectUser);
+  const savedReports = useSelector((state) => state.reports.savedReports);
   const [greeting, setGreeting] = useState('Good Morning');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
@@ -176,7 +177,7 @@ const HomeScreen = ({ navigation }) => {
       icon: <BookOpen color="#005A9C" size={28} />,
       backgroundColor: '#EBF4FF',
       textColor: '#005A9C',
-      action: () => navigation?.navigate('Resources')
+      action: () => navigation?.navigate('Cases', { screen: 'SearchPastCases' })
     }
   ];
 
@@ -403,9 +404,11 @@ const HomeScreen = ({ navigation }) => {
                 <Text style={styles.aiSubtitle}>
                   Access comprehensive Sri Lankan divorce case analysis
                 </Text>
-                {/* <View style={styles.aiStats}>
-                  <Text style={styles.aiStatsText}>2 Active Reports • Updated Today</Text>
-                </View> */}
+                <View style={styles.aiStats}>
+                  <Text style={styles.aiStatsText}>
+                    {savedReports.length} saved report{savedReports.length !== 1 ? 's' : ''}
+                  </Text>
+                </View>
               </View>
               <ChevronRight color="rgba(255,255,255,0.8)" size={24} />
             </View>

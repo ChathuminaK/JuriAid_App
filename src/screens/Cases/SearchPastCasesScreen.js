@@ -102,7 +102,7 @@ const SearchPastCasesScreen = ({ navigation }) => {
             <View style={styles.fileInfo}>
               <Text style={styles.fileName}>{file.name}</Text>
               <Text style={styles.fileSize}>
-                {(file.size / (1024 * 1024)).toFixed(2)} MB
+                {file.size ? (file.size / (1024 * 1024)).toFixed(2) + ' MB' : 'Unknown size'}
               </Text>
             </View>
           </View>
