@@ -4,7 +4,7 @@ import {
   Alert, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
-import { Scale, FileText, Upload, BookOpen } from 'lucide-react-native';
+import { Scale, FileText, Upload, BookOpen, Scroll, Search } from 'lucide-react-native';
 import lawStatKGService from '../../api/lawstatkg';
 import { log } from '../../api/index';
 
@@ -123,14 +123,32 @@ const SearchLawsScreen = ({ navigation }) => {
           </TouchableOpacity>
         )}
 
-        {/* External Resources Button */}
+        {/* Amendments Button */}
         <TouchableOpacity
+          style={styles.amendmentsButton}
+          onPress={() => navigation.navigate('AmendmentsList')}
+        >
+          <Scroll color="#7C3AED" size={20} />
+          <Text style={styles.amendmentsButtonText}>View Amendments</Text>
+        </TouchableOpacity>
+
+        {/* Search Laws by Query Button */}
+        <TouchableOpacity
+          style={styles.querySearchButton}
+          onPress={() => navigation.navigate('LawQuerySearch')}
+        >
+          <Search color="#0F766E" size={20} />
+          <Text style={styles.querySearchButtonText}>Search Laws by Text</Text>
+        </TouchableOpacity>
+
+        {/* External Resources Button */}
+        {/* <TouchableOpacity
           style={styles.resourcesButton}
           onPress={() => navigation.navigate('Resources')}
         >
           <BookOpen color="#3B82F6" size={20} />
           <Text style={styles.resourcesButtonText}>External Legal Resources</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>ℹ️ How it works</Text>
@@ -243,6 +261,44 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  amendmentsButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#7C3AED',
+    marginBottom: 12,
+  },
+  amendmentsButtonText: {
+    color: '#7C3AED',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  querySearchButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#0F766E',
+    marginBottom: 12,
+  },
+  querySearchButtonText: {
+    color: '#0F766E',
+    fontSize: 15,
     fontWeight: '600',
   },
   resourcesButton: {

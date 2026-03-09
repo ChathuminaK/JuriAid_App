@@ -50,7 +50,11 @@ const ProfileScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             await dispatch(logout()).unwrap();
-            navigation.getParent()?.replace('Login');
+            // Reset to root Login screen, forcing all nested screens to unmount
+            navigation.getParent()?.getParent()?.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
           },
         },
       ]

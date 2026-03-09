@@ -620,9 +620,9 @@ Q${q.question_id || i + 1}: ${q.question || 'N/A'}
                   <Text style={styles.cardTitle} numberOfLines={expanded ? 0 : 2}>
                     {lawLabel(law.case_name, law.citation)}
                   </Text>
-                  <View style={styles.badge}>
+                  {/* <View style={styles.badge}>
                     <Text style={[styles.badgeText, { color: '#92400E' }]}>{relevancePct}%</Text>
-                  </View>
+                  </View> */}
                 </View>
                 <Text style={styles.tapHint}>👆 Tap to view full law detail</Text>
               </TouchableOpacity>

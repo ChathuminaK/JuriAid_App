@@ -79,9 +79,9 @@ const LawResultsScreen = ({ route, navigation }) => {
                 <Text style={styles.lawTitle} numberOfLines={2}>
                   {lawItem.case_name || 'Unknown Case'}
                 </Text>
-                <View style={styles.confidenceBadge}>
+                {/* <View style={styles.confidenceBadge}>
                   <Text style={styles.confidenceText}>{confidencePct}%</Text>
-                </View>
+                </View> */}
               </View>
               
               {lawItem.citation && (

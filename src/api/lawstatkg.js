@@ -59,6 +59,47 @@ export const lawStatKGService = {
     }
   },
 
+  getAmendments: async () => {
+    log.info('[lawStatKGService] getAmendments called');
+    try {
+      const response = await lawStatKGAPI.get('/amendments');
+      log.info('[lawStatKGService] getAmendments success', { count: response.data?.count });
+      return response.data;
+    } catch (error) {
+      log.error('[lawStatKGService] getAmendments failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
+      throw error.response?.data?.detail || 'Failed to fetch amendments';
+    }
+  },
+
+  searchLaws: async ({ query, jurisdiction = null, as_of_date = null, bm25_candidates = 80, alpha = 0.65, beta = 0.35, min_match_ratio = 0.5, min_semantic_cosine = 0.20 }) => {
+    log.info('[lawStatKGService] searchLaws called', { query });
+    try {
+      const response = await lawStatKGAPI.post('/Lawsearch', {
+        query,
+        jurisdiction,
+        as_of_date,
+        bm25_candidates,
+        alpha,
+        beta,
+        min_match_ratio,
+        min_semantic_cosine,
+      });
+      log.info('[lawStatKGService] searchLaws success', { count: response.data?.length });
+      return response.data;
+    } catch (error) {
+      log.error('[lawStatKGService] searchLaws failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message,
+      });
+      throw error.response?.data?.detail || 'Failed to search laws';
+    }
+  },
+
 };
 
 export default lawStatKGService;
