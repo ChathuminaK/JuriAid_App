@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ScrollView, ActivityIndicator, TextInput,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { log } from '../../api/index';
 import orchestratorService from '../../api/orchestrator';
 
+const PROMPT = 'Analyze this Sri Lankan divorce case';
+
 const NewCaseScreen = ({ navigation }) => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [prompt, setPrompt]             = useState('Analyze this Sri Lankan divorce case');
   const [loading, setLoading]           = useState(false);
   const [uploadPhase, setUploadPhase]   = useState('');
 
@@ -29,7 +30,6 @@ const NewCaseScreen = ({ navigation }) => {
         uri:  result.uri,
       });
 
-      // Validate file size (max 10 MB)
       if (result.size && result.size > 10 * 1024 * 1024) {
         log.warn('[NewCaseScreen] file too large:', result.size);
         Alert.alert('File Too Large', `File is ${(result.size / 1024 / 1024).toFixed(1)} MB. Maximum allowed is 10 MB.`);
@@ -58,7 +58,7 @@ const NewCaseScreen = ({ navigation }) => {
     log.info('[NewCaseScreen] handleAnalyze started', {
       file:   selectedFile.name,
       size:   selectedFile.size,
-      prompt,
+      prompt: PROMPT,
     });
 
     setLoading(true);
@@ -67,7 +67,7 @@ const NewCaseScreen = ({ navigation }) => {
     try {
       setUploadPhase('Running AI analysis… (this may take few minutes)');
 
-      const result = await orchestratorService.analyzeCase(selectedFile, prompt);
+      const result = await orchestratorService.analyzeCase(selectedFile, PROMPT);
 
       log.info('[NewCaseScreen] analysis completed', {
         analysis_id:             result.analysis_id,
@@ -85,7 +85,6 @@ const NewCaseScreen = ({ navigation }) => {
     } catch (error) {
       log.error('[NewCaseScreen] analysis failed:', error);
 
-      // 422 – structured "Invalid case type" from orchestrator
       if (error && typeof error === 'object' && error.error === 'Invalid case type') {
         Alert.alert(
           '❌ Invalid Case Type',
@@ -156,21 +155,6 @@ const NewCaseScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* Prompt Input */}
-      <Text style={styles.label}>Analysis Prompt</Text>
-      <TextInput
-        style={styles.promptInput}
-        value={prompt}
-        onChangeText={(text) => {
-          log.info('[NewCaseScreen] prompt changed:', text);
-          setPrompt(text);
-        }}
-        placeholder="e.g., Analyze this Sri Lankan divorce case"
-        placeholderTextColor="#9CA3AF"
-        multiline
-        editable={!loading}
-      />
-
       {/* Loading */}
       {loading && (
         <View style={styles.loadingContainer}>
@@ -184,9 +168,8 @@ const NewCaseScreen = ({ navigation }) => {
       {!loading && (
         <>
           <TouchableOpacity
-            style={[styles.analyzeButton, !selectedFile && styles.buttonDisabled]}
+            style={styles.analyzeButton}
             onPress={handleAnalyze}
-            disabled={!selectedFile}
           >
             <Text style={styles.analyzeButtonText}>🔍 Analyze Case</Text>
           </TouchableOpacity>
@@ -222,13 +205,6 @@ const styles = StyleSheet.create({
     marginBottom: 20, borderWidth: 1, borderColor: '#BBF7D0',
   },
   fileInfoText:      { fontSize: 13, color: '#166534', marginBottom: 2 },
-
-  label:             { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  promptInput: {
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#D1D5DB',
-    borderRadius: 10, padding: 12, fontSize: 14, color: '#1E293B',
-    minHeight: 80, textAlignVertical: 'top', marginBottom: 20,
-  },
 
   loadingContainer:  { alignItems: 'center', marginVertical: 24 },
   loadingText:       { marginTop: 12, fontSize: 15, color: '#005A9C', fontWeight: '600', textAlign: 'center' },
