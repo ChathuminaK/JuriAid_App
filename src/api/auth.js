@@ -27,7 +27,7 @@ export const authService = {
     try {
       const response = await authAPI.post('/auth/login', { email, password });
       log.info('[authService] login success – token received:', !!response.data.access_token);
-      return response.data; // { access_token, token_type, ... }
+      return response.data;
     } catch (error) {
       log.error('[authService] login failed:', {
         status:  error.response?.status,
@@ -69,6 +69,54 @@ export const authService = {
         message: error.message,
       });
       throw error.response?.data?.detail || 'Failed to get profile';
+    }
+  },
+
+  // ── Update Profile ────────────────────────────────────────────────────────
+  updateProfile: async ({ full_name, phone, profileImage }) => {
+    log.info('[authService] updateProfile called', { full_name, phone, hasImage: !!profileImage });
+    try {
+      if (profileImage) {
+        // Use native fetch for multipart/form-data image upload
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const token = await AsyncStorage.getItem('authToken');
+
+        const formData = new FormData();
+        if (full_name) formData.append('full_name', full_name);
+        if (phone !== undefined && phone !== null) formData.append('phone', phone);
+        formData.append('profile_image', {
+          uri: profileImage.uri,
+          type: profileImage.type || 'image/jpeg',
+          name: profileImage.name || 'profile.jpg',
+        });
+
+        const res = await fetch('/auth/me', {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw err.detail || 'Failed to update profile';
+        }
+
+        log.info('[authService] updateProfile (image) success – fetching fresh profile');
+        // Fetch fresh profile to get updated profile_icon_url
+        const updated = await authService.getProfile();
+        return updated;
+      } else {
+        const response = await authAPI.put('/auth/me', { full_name, phone });
+        log.info('[authService] updateProfile success:', response.data);
+        return response.data;
+      }
+    } catch (error) {
+      log.error('[authService] updateProfile failed:', {
+        status:  error.response?.status,
+        detail:  error.response?.data?.detail,
+        message: error.message || error,
+      });
+      throw error.response?.data?.detail || error || 'Failed to update profile';
     }
   },
 
