@@ -108,7 +108,7 @@ const CaseDetailModal = ({ visible, caseData, loading, onClose }) => {
   const [activeSection, setActiveSection] = useState('judgment');
 
   const sections = [
-    caseData?.judgment || caseData?.judgment_preview ? { key: 'judgment',  label: '⚖️ Judgment'  } : null,
+    caseData?.judgment || caseData?.judgment_preview ? { key: 'judgment',  label: '⚖️ Case'  } : null,
     caseData?.complaint                               ? { key: 'complaint', label: '📋 Complaint' } : null,
     caseData?.defense                                 ? { key: 'defense',   label: '🛡 Defense'   } : null,
   ].filter(Boolean);
