@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // const COMPUTER_IP = '192.168.8.106'; //my router
-const COMPUTER_IP = '4.194.3.165';
+const COMPUTER_IP = '4.194.3.165'; //prod server (azure vm)
 //const COMPUTER_IP = '192.168.119.189'; //samidi mobile
 
 const API_URLS = {
